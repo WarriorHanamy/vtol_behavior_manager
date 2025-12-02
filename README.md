@@ -10,120 +10,256 @@
 
 </div>
 
----
-
-## 📋 目录
-
-- [项目简介](#项目简介)
-- [功能特性](#功能特性)
-- [系统要求](#系统要求)
-- [快速开始](#快速开始)
-  - [Docker 部署](#docker-部署)
-  - [本地构建](#本地构建)
-- [包结构](#包结构)
-- [使用说明](#使用说明)
-- [开发计划](#开发计划)
-- [更新日志](#更新日志)
-- [贡献指南](#贡献指南)
-- [作者信息](#作者信息)
-- [许可证](#许可证)
-
----
-
-## 🚀 项目简介
-
-PX4-ROS2-Bridge 是一个连接 PX4 自动驾驶仪与 ROS 2 生态系统的桥接项目，提供了一系列工具和接口，用于：
-
-- 实现 PX4 自定义飞行模式
-- 神经网络控制集成
-
-
-本项目基于 [px4-ros2-interface-lib](https://github.com/PX4/px4-ros2-interface-lib) 进行扩展开发。
-
----
-
-## ✨ 功能特性
-
-- ✅ **神经网络控制模式**：支持基于神经网络的飞行器控制
-- ✅ **执行器支持**：多模式执行器框架
-- ✅ **Docker 容器化**：开箱即用的开发环境
-- ✅ **PX4 消息转换**：完整的 PX4 消息类型支持
-- 🔄 **实时控制**：低延迟的控制指令传输
-
----
-
-## 💻 系统要求
-
-### 软件依赖
-
-- **操作系统**: Ubuntu 22.04 (推荐)
-- **ROS 2**: Humble Hawksbill
-- **PX4-Autopilot**: v1.16 或更高版本
-- **Docker**: 20.10 或更高版本
-- **Just**: 命令运行工具
-
----
 
 ## 🎯 快速开始
+### 📥 克隆仓库
 
-### Docker 部署
+```bash
+git clone --recursive https://github.com/Arclunar/PX4-ROS2-Bridge.git --depth 1 .
+```
+### 配置px4_msgs
+```bash
+just config-px4msg
+```
+
+
+### Docker 部署 QGroundControl
 
 #### 1. 构建 Docker 镜像
 
 ```bash
-just build-image
+just build-qgc
 ```
 
-或使用 Docker 命令：
+
+#### 2. 测试运行容器启动 QGroundControl
 
 ```bash
-docker build -t px4-ros2-bridge .
+just run-qgc
 ```
 
-#### 2. 运行容器
+
+### Docker 部署 PX4-ROS2-BRIDGE
+
+#### 1. 构建 Docker 镜像
 
 ```bash
-just run-container
+just build-ros2
 ```
 
-### 本地构建
 
-#### 1. 安装依赖
+#### 2. 测试运行容器
 
 ```bash
-# 安装 ROS 2 Humble (如果尚未安装)
-# 参考: https://docs.ros.org/en/humble/Installation.html
-
-# 安装项目依赖
-sudo apt update
-sudo apt install -y \
-  ros-humble-px4-msgs \
-  ros-humble-eigen3-cmake-module \
-  libeigen3-dev
+just run-ros2
 ```
 
-#### 2. 克隆仓库
+
+
+
+## 📖 使用说明
+
+### 0️⃣ 训练权重和观测对齐
+
+#### 📁 模型文件配置
+
+将训练好的 ONNX 模型文件放置在以下目录：
+```
+src/isaac_pos_ctrl_neural/models/
+```
+
+#### ⚙️ 参数配置
+
+修改启动文件中的模型路径：
+```bash
+src/isaac_pos_ctrl_neural/launch/isaac_pos_ctrl_launch.py
+```
+更新 `model_path` 参数指向你的模型文件。
+
+#### 🔧 观测量对齐
+
+如果观测量设置不同，需要修改观测量对齐函数：
+```bash
+src/isaac_pos_ctrl_neural/isaac_pos_ctrl_neural/isaac_pos_ctrl_node.py
+```
+
+#### 📊 当前观测量配置
+
+<table>
+<tr>
+<th width="5%">序号</th>
+<th width="30%">观测量名称</th>
+<th width="15%">维度</th>
+<th width="50%">描述</th>
+</tr>
+<tr>
+<td align="center">1</td>
+<td><code>lin_vel</code></td>
+<td align="center">3D</td>
+<td>线速度 <code>[vx, vy, vz]</code></td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td><code>projected_gravity_b</code></td>
+<td align="center">3D</td>
+<td>投影重力（机体坐标系）<code>[gx, gy, gz]</code></td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td><code>ang_vel</code></td>
+<td align="center">3D</td>
+<td>角速度 <code>[wx, wy, wz]</code></td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td><code>current_yaw_direction</code></td>
+<td align="center">2D</td>
+<td>当前偏航方向 <code>[cos(yaw), sin(yaw)]</code></td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td><code>target_pos_b</code></td>
+<td align="center">3D</td>
+<td>目标位置（机体坐标系）<code>[tx, ty, tz]</code></td>
+</tr>
+<tr>
+<td align="center">6</td>
+<td><code>target_yaw</code></td>
+<td align="center">2D</td>
+<td>目标偏航方向 <code>[cos(yaw_target), sin(yaw_target)]</code></td>
+</tr>
+<tr>
+<td align="center">7</td>
+<td><code>actions</code></td>
+<td align="center">4D</td>
+<td>上一时刻动作 <code>[a1, a2, a3, a4]</code></td>
+</tr>
+<tr>
+<td colspan="2" align="right"><b>总维度：</b></td>
+<td align="center"><b>20D</b></td>
+<td><b>3+3+3+2+3+2+4 = 20</b></td>
+</tr>
+</table>
+
+> 💡 **提示**: 观测量总维度为 **20维**，确保你的模型输入与此一致。
+
+---
+
+### 1️⃣ 启动 PX4 SITL 仿真
+
+> 📚 参考文档: [PX4-NeuPilot](https://github.com/Arclunar/PX4-Neupilot)
+
+启动 PX4 仿真和 Micro XRCE-DDS Agent。
+
+---
+
+### 2️⃣ 启动 QGroundControl
 
 ```bash
-cd ~/
-mkdir -p ros2_ws/src
-cd ros2_ws/src
-git clone --recursive https://github.com/Arclunar/px4-ros2-interface.git .
+just run-qgc
 ```
 
-#### 3. 构建工作空间
+---
+
+### 3️⃣ 启动神经网络控制模式
+
+<table>
+<tr>
+<th>步骤</th>
+<th>终端</th>
+<th>命令</th>
+<th>说明</th>
+</tr>
+<tr>
+<td align="center">1</td>
+<td>终端 1️⃣</td>
+<td>
 
 ```bash
-cd ~/ros2_ws
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install
+just run-ros2
 ```
 
-#### 4. 启动环境
+</td>
+<td>进入 ROS2 容器</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td>终端 1️⃣</td>
+<td>
 
 ```bash
-source install/setup.bash
+just neural_mode
 ```
+
+</td>
+<td>启动 PX4-ROS2 接口</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td>终端 2️⃣</td>
+<td>
+
+```bash
+just enter-ros2
+```
+
+</td>
+<td>另开终端进入容器</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td>终端 2️⃣</td>
+<td>
+
+```bash
+just neural_inference
+```
+
+</td>
+<td>启动神经网络推理节点</td>
+</tr>
+</table>
+
+---
+
+### 4️⃣ 切换到 Demo Start 模式
+
+在 QGroundControl 中选择 **Demo Start** 模式。
+
+---
+
+### 5️⃣ 解锁飞行器
+
+解锁后，飞行器将：
+- ✅ 自动起飞
+- ✅ 进入 Position 模式
+
+---
+
+### 6️⃣ 激活神经网络控制
+
+通过以下任一方式激活：
+
+<table>
+<tr>
+<td width="50%">
+
+**🎮 方式 1: 遥控器**
+- 触发 `button=1024`
+
+</td>
+<td width="50%">
+
+**💻 方式 2: QGroundControl**
+- 选择模式: **Neural Control**
+
+</td>
+</tr>
+</table>
+
+成功后进入 **🧠 神经网络控制模式**！
+
+
 
 ---
 
@@ -145,113 +281,7 @@ ros2_ws/
 └── log/                             # 日志文件
 ```
 
----
 
-## 📖 使用说明
-
-### 启动神经网络控制模式
-
-```bash
-# 终端 1: 启动 PX4 SITL 仿真
-cd ~/PX4-Autopilot
-make px4_sitl gz_x500
-
-# 终端 2: 启动控制节点
-source ~/ros2_ws/install/setup.bash
-ros2 run neural_demo neural_demo_node
-
-# 终端 3: 发送目标位置
-ros2 run isaac_pos_ctrl_neural set_target_pos.py
-```
-
-### 查看话题
-
-```bash
-# 查看所有话题
-ros2 topic list
-
-# 监听神经网络输出
-ros2 topic echo /neural/rates_sp
-
-# 监听位置信息
-ros2 topic echo /fmu/out/vehicle_local_position
-```
-
----
-
-## 📅 开发计划
-
-### 当前版本 (v0.1.0)
-
-- [x] 基础框架搭建
-- [x] 神经网络控制模式
-- [x] Docker 环境配置
-- [x] PX4 消息转换
-
-### 下一版本 (v0.2.0)
-
-- [ ] 完善神经网络训练流程
-- [ ] 增加碰撞检测模块
-- [ ] 优化控制性能
-- [ ] 添加仿真测试用例
-- [ ] 编写完整的 API 文档
-
-### 未来计划
-
-- [ ] 多机协同控制
-- [ ] 视觉 SLAM 集成
-- [ ] 强化学习训练框架
-- [ ] Web 监控界面
-- [ ] 硬件在环测试支持
-
----
-
-## 📝 更新日志
-
-### [Unreleased]
-
-#### 新增
-- 添加 `USE_SCOPED_HEADER_INSTALL_DIR` 选项以符合 ROS 2 未来版本规范
-- 完善 README 文档结构
-
-#### 修复
-- 修复头文件安装路径警告
-
----
-
-### [0.1.0] - 2025-12-02
-
-#### 新增
-- 初始项目结构
-- 神经网络控制模式 (`neural_demo`)
-- Isaac 位置控制节点
-- Docker 构建支持
-- PX4-ROS2 基础接口
-
-#### 已知问题
-- 神经网络模型尚未完全训练
-- 部分模式缺少详细文档
-
----
-
-## 🤝 贡献指南
-
-欢迎贡献代码、报告问题或提出建议！
-
-### 贡献流程
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-### 代码规范
-
-- 遵循 [ROS 2 编码规范](https://docs.ros.org/en/humble/The-ROS2-Project/Contributing/Code-Style-Language-Versions.html)
-- 使用有意义的提交信息
-- 添加必要的注释和文档
-- 确保代码通过编译和测试
 
 ---
 
