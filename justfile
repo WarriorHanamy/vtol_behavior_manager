@@ -24,6 +24,12 @@ build:
     colcon build --symlink-install \
     --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
 
+alias b := full-build
+full-build:
+    just config-px4msg && \
+    just build
+
+alias c := clean
 clean:
     [ -d build ] && rm -rf build; [ -d log ] && rm -rf log; [ -d install ] && rm -rf install
 
@@ -61,5 +67,18 @@ run-ros2:
         --name ros2 \
         ros2
 
+# attach
+alias a := enter-ros2
 enter-ros2:
     docker exec -it ros2 bash
+
+
+# Docker Compose commands
+up:
+    docker compose up
+
+down:
+    docker compose down
+
+dc-restart:
+    docker compose restart

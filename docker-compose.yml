@@ -1,0 +1,56 @@
+
+services:
+  qgc:
+    build:
+      context: .
+      dockerfile: docker/qgc5.dockerfile
+      network: host
+    image: qgc5:latest
+    container_name: qgc5
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+    volumes:
+      - ${HOME}/.Xauthority:/home/qgc/.Xauthority
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    command: qgc
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  ros2:
+    build:
+      context: .
+      dockerfile: docker/ros2.dockerfile
+      network: host
+    image: ros2:latest
+    container_name: ros2
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    working_dir: /home/ros/ros2_ws
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+      - ROS_DISTRO=humble
+    volumes:
+      - ${HOME}/.Xauthority:/home/ros/.Xauthority
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - .:/home/ros/ros2_ws
+    command: tail -f /dev/null
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
