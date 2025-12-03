@@ -73,19 +73,21 @@ run-ros2:
         ros2
 
 build-px4:
-    bash {{justfile_directory()}}/scripts/build_px4_gazebo.sh
+    docker build -f docker/px4-gazebo.dockerfile \
+    --network=host \
+    -t px4-gazebo-harmonic:v1 .
 
-run-px4:
+run-px4 model="2":
     docker run -it --gpus all \
         --rm \
-        --entrypoint bash \
         --privileged --network host \
         -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 \
         -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
         -v $HOME/.Xauthority:/root/.Xauthority \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         --name px4-gazebo-harmonic-tmp \
-        px4-gazebo-harmonic:v1
+        px4-gazebo-harmonic:v1 \
+        /bin/bash -c "source ~/.bashrc && runsim.sh {{model}}"
 
 enter-px4:
     docker exec -it px4-gazebo-harmonic-tmp /bin/bash
