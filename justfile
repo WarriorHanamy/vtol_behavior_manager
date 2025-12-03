@@ -20,7 +20,12 @@ config-px4msg:
     bash ./scripts/config_px4msg.sh
 
 build:
-    colcon build --symlink-install
+    source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    colcon build --symlink-install \
+    --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+
+clean:
+    [ -d build ] && rm -rf build; [ -d log ] && rm -rf log; [ -d install ] && rm -rf install
 
 build-qgc:
     docker build -f docker/qgc5.dockerfile \
