@@ -3,7 +3,7 @@ All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
 
-This project uses the IsaacLab framework,
+This project uses the px4-ros2-interface-lib framework,
 which is licensed under the BSD-3-Clause License.
 The authors are as follows
-WarriorHanamy: rongerch@outlook.com
+Arclunar: zhenghw23@foxmail.com
