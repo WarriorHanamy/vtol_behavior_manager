@@ -16,11 +16,16 @@ fake-network:
     source ./install/setup.sh && \
     ros2 launch neural_demo fake_network_node.launch.py
 
-config-px4msg:
-    bash ./scripts/config_px4msg.sh
+config-px4msgs:
+    bash ./scripts/config_px4msgs.sh
 
 build:
-    colcon build --symlink-install
+    source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    colcon build --symlink-install \
+    --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+
+clean:
+    rm build/ log/ install/ -fr
 
 build-qgc:
     docker build -f docker/qgc5.dockerfile \

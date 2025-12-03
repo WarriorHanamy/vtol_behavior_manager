@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import rclpy
@@ -27,6 +27,13 @@ import rclpy.node
 import rclpy.qos
 from px4_msgs.msg import VehicleRatesSetpoint, VehicleOdometry
 from std_msgs.msg import Bool
+
+from isaac_pos_ctrl_neural.math_utils import (
+    quaternion_to_euler,
+    rotation_matrix_ned_to_body,
+    rotation_matrix_body_to_ned,
+    quat_rotate_inverse,
+)
 
 try:
     import onnxruntime as ort
@@ -50,12 +57,19 @@ class IsaacPositionControlNode(rclpy.node.Node):
         self._active = False
         self._last_odom_sample_time = 0.0
         self._last_odom_receive_time = 0.0
+        self._first_odom_received = False  # 标记是否收到第一帧
         self._last_action = np.array(
             [0.0, 0.0, 0.0, 0.0]
         )  # [throttle, roll_rate, pitch_rate, yaw_rate]
         self._target_position = np.array([0.0, 0.0, 1.5])  # NED坐标系 [x, y, z]
         self._target_yaw = 0.0  # 目标偏航角 (弧度)
         self._init_success = False
+
+        # 接收间隔统计
+        self._receive_interval_samples = []
+        self._sample_interval_samples = []
+        self._last_interval_report_time = 0.0
+        self._interval_report_period = 5.0  # 每5秒报告一次平均间隔
 
         # 获取参数
         self.setup_parameters()
@@ -247,23 +261,66 @@ class IsaacPositionControlNode(rclpy.node.Node):
 
         # 检查数据新鲜度
         current_receive_time = time.time() * 1e6  # 转换为微秒
-        if current_receive_time - self._last_odom_receive_time > 50000:  # 50ms超时
-            self.get_logger().error(
-                "里程计接收间隔："
-                + f"{(current_receive_time - self._last_odom_receive_time) / 1000.0:.1f} ms，数据过时"
-            )
-        # else:
-        #     self.get_logger().info("\033[1;32m里程计接收间隔："+f"{(current_receive_time - self._last_odom_receive_time)/1000.0:.1f} ms\033[0m")
-        self._last_odom_receive_time = current_receive_time
-
         current_sample_time = msg.timestamp_sample
-        if current_sample_time - self._last_odom_sample_time > 50000:  # 50ms超时
+
+        # 跳过第一帧的检查
+        if not self._first_odom_received:
+            self._first_odom_received = True
+            self._last_odom_receive_time = current_receive_time
+            self._last_odom_sample_time = current_sample_time
+            self._last_interval_report_time = time.time()
+            self.get_logger().info("✅ 收到第一帧里程计数据")
+            return
+
+        # 计算接收间隔
+        receive_interval = (
+            current_receive_time - self._last_odom_receive_time
+        ) / 1000.0  # ms
+        sample_interval = (
+            current_sample_time - self._last_odom_sample_time
+        ) / 1000.0  # ms
+
+        # 检查接收间隔超时
+        if receive_interval > 50.0:  # 50ms超时
             self.get_logger().error(
-                "里程计采样间隔："
-                + f"{(current_sample_time - self._last_odom_sample_time) / 1000.0:.1f} ms，数据过时"
+                f"⚠️ 里程计接收间隔: {receive_interval:.1f} ms，数据过时"
             )
-        # else:
-        #     self.get_logger().info("\033[1;32m里程计采样间隔："+f"{(current_sample_time - self._last_odom_sample_time)/1000.0:.1f} ms\033[0m")
+        else:
+            # 记录正常的接收间隔用于统计
+            self._receive_interval_samples.append(receive_interval)
+            # 限制样本数量（保留最近100个）
+            if len(self._receive_interval_samples) > 100:
+                self._receive_interval_samples.pop(0)
+
+        # 检查采样间隔超时
+        if sample_interval > 50.0:  # 50ms超时
+            self.get_logger().error(
+                f"⚠️ 里程计采样间隔: {sample_interval:.1f} ms，数据过时"
+            )
+        else:
+            # 记录正常的采样间隔用于统计
+            self._sample_interval_samples.append(sample_interval)
+            # 限制样本数量（保留最近100个）
+            if len(self._sample_interval_samples) > 100:
+                self._sample_interval_samples.pop(0)
+
+        # 定期报告平均间隔
+        current_time = time.time()
+        if (
+            current_time - self._last_interval_report_time
+            >= self._interval_report_period
+        ):
+            if self._receive_interval_samples and self._sample_interval_samples:
+                avg_receive = np.mean(self._receive_interval_samples)
+                avg_sample = np.mean(self._sample_interval_samples)
+                self.get_logger().info(
+                    f"📊 里程计统计 (最近{len(self._receive_interval_samples)}帧): "
+                    f"平均接收间隔={avg_receive:.1f}ms, 平均采样间隔={avg_sample:.1f}ms"
+                )
+            self._last_interval_report_time = current_time
+
+        # 更新时间戳
+        self._last_odom_receive_time = current_receive_time
         self._last_odom_sample_time = current_sample_time
 
         if not self._model_loaded or not self._active:
@@ -374,10 +431,10 @@ class IsaacPositionControlNode(rclpy.node.Node):
             # 1. lin_vel (3维) - 转换为机体坐标系
             if msg.velocity_frame == msg.VELOCITY_FRAME_NED:
                 # NED到机体坐标系的转换 (忽略滚动和俯仰的小角度假设)
-                roll, pitch, yaw = self.quaternion_to_euler(quaternion)
+                roll, pitch, yaw = quaternion_to_euler(quaternion)
 
                 # 旋转矩阵 (NED到机体)
-                R = self.rotation_matrix_ned_to_body(roll, pitch, yaw)
+                R = rotation_matrix_ned_to_body(roll, pitch, yaw)
                 lin_vel_b = R @ velocity
             elif msg.velocity_frame == msg.VELOCITY_FRAME_BODY_FRD:
                 lin_vel_b = velocity
@@ -396,8 +453,8 @@ class IsaacPositionControlNode(rclpy.node.Node):
 
             # 4. current_yaw_direction (2维) - 机体x轴在世界水平面的投影方向
             # 获取机体到世界的旋转矩阵
-            roll, pitch, yaw = self.quaternion_to_euler(quaternion)
-            R_body_to_world = self.rotation_matrix_body_to_ned(roll, pitch, yaw)
+            roll, pitch, yaw = quaternion_to_euler(quaternion)
+            R_body_to_world = rotation_matrix_body_to_ned(roll, pitch, yaw)
 
             # 机体x轴在世界坐标系中的方向
             body_x_world = R_body_to_world @ np.array([1.0, 0.0, 0.0])
@@ -418,7 +475,7 @@ class IsaacPositionControlNode(rclpy.node.Node):
             to_target = target_world - current_world
 
             # 使用四元数旋转向量到机体坐标系 (注意四元数约定)
-            target_pos_b = self.quat_rotate_inverse(quaternion, to_target)
+            target_pos_b = quat_rotate_inverse(quaternion, to_target)
 
             # 6. target_yaw (2维) - 目标偏航方向的单位向量
             target_yaw_dir = np.array(
@@ -560,71 +617,6 @@ class IsaacPositionControlNode(rclpy.node.Node):
 
         except Exception as e:
             self.get_logger().error(f"停止指令发布错误: {e}")
-
-    def quaternion_to_euler(self, q: np.ndarray) -> Tuple[float, float, float]:
-        """四元数转换为欧拉角 (roll, pitch, yaw)"""
-        # Hamilton约定四元数 [w, x, y, z]
-        w, x, y, z = q[0], q[1], q[2], q[3]
-
-        # 欧拉角转换
-        roll = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
-        pitch = math.asin(np.clip(2 * (w * y - z * x), -1, 1))
-        yaw = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
-
-        return roll, pitch, yaw
-
-    def rotation_matrix_ned_to_body(
-        self, roll: float, pitch: float, yaw: float
-    ) -> np.ndarray:
-        """计算NED到机体坐标系的旋转矩阵"""
-        cr, sr = math.cos(roll), math.sin(roll)
-        cp, sp = math.cos(pitch), math.sin(pitch)
-        cy, sy = math.cos(yaw), math.sin(yaw)
-
-        # ZYX旋转序列 (先绕Z转yaw，再绕Y转pitch，最后绕X转roll)
-        R = np.array(
-            [
-                [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-                [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-                [-sp, cp * sr, cp * cr],
-            ]
-        )
-        return R
-
-    def rotation_matrix_body_to_ned(
-        self, roll: float, pitch: float, yaw: float
-    ) -> np.ndarray:
-        """计算机体到NED坐标系的旋转矩阵（NED到机体的转置）"""
-        # 机体到世界的旋转矩阵是NED到机体旋转矩阵的转置
-        R_ned_to_body = self.rotation_matrix_ned_to_body(roll, pitch, yaw)
-        return R_ned_to_body.T
-
-    def quat_rotate_inverse(self, q: np.ndarray, v: np.ndarray) -> np.ndarray:
-        """使用四元数逆旋转向量"""
-        w, x, y, z = q[0], q[1], q[2], q[3]
-
-        # 四元数逆
-        q_inv = np.array([w, -x, -y, -z])
-
-        # 四元数旋转向量 (使用Hamilton约定)
-        # q * v * q_conj，其中v作为纯四元数[0, vx, vy, vz]
-        result = self.quaternion_multiply(
-            self.quaternion_multiply(q, np.array([0.0, v[0], v[1], v[2]])), q_inv
-        )
-
-        return result[1:4]  # 返回向量部分
-
-    def quaternion_multiply(self, q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-        """四元数乘法 (Hamilton约定)"""
-        w1, x1, y1, z1 = q1[0], q1[1], q1[2], q1[3]
-        w2, x2, y2, z2 = q2[0], q2[1], q2[2], q2[3]
-
-        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-
-        return np.array([w, x, y, z])
 
 
 def main(args=None):

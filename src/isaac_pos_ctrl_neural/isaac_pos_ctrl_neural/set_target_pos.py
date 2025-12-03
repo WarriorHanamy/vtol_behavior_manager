@@ -22,14 +22,15 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header
 
+from .math_utils import euler_to_quaternion
+
 
 class TargetPositionSetter(Node):
     """目标位置设置节点"""
 
-    def __init__(self,
-                 position: List[float],
-                 yaw: float = 0.0,
-                 frame_id: str = "world"):
+    def __init__(
+        self, position: List[float], yaw: float = 0.0, frame_id: str = "world"
+    ):
         """
         初始化目标设置节点
 
@@ -38,7 +39,7 @@ class TargetPositionSetter(Node):
             yaw: 目标偏航角 (radians)
             frame_id: 坐标系ID
         """
-        super().__init__('set_target_pos')
+        super().__init__("set_target_pos")
 
         if len(position) != 3:
             self.get_logger().error(f"位置参数必须有3个元素，得到 {len(position)}")
@@ -50,13 +51,13 @@ class TargetPositionSetter(Node):
 
         # 创建发布者
         self._target_pose_publisher = self.create_publisher(
-            PoseStamped,
-            '/neural/target_pose',
-            10
+            PoseStamped, "/neural/target_pose", 10
         )
 
-        self.get_logger().info(f"目标位置设置工具已初始化:")
-        self.get_logger().info(f"  位置(NED): {position[0]:.2f}, {position[1]:.2f}, {position[2]:.2f}")
+        self.get_logger().info("目标位置设置工具已初始化:")
+        self.get_logger().info(
+            f"  位置(NED): {position[0]:.2f}, {position[1]:.2f}, {position[2]:.2f}"
+        )
         self.get_logger().info(f"  偏航角: {math.degrees(yaw):.1f}°")
         self.get_logger().info(f"  坐标系: {frame_id}")
 
@@ -74,11 +75,14 @@ class TargetPositionSetter(Node):
         msg.pose.position.z = self._target_position[2]  # 地下
 
         # 设置姿态 (仅偏航，无滚动和俯仰)
-        half_yaw = self._target_yaw / 2.0
-        msg.pose.orientation.w = math.cos(half_yaw)
-        msg.pose.orientation.x = 0.0  # 无滚动
-        msg.pose.orientation.y = 0.0  # 无俯仰
-        msg.pose.orientation.z = math.sin(half_yaw)
+        # 使用math_utils中的euler_to_quaternion函数
+        quaternion = euler_to_quaternion(
+            0.0, 0.0, self._target_yaw
+        )  # roll=0, pitch=0, yaw=target_yaw
+        msg.pose.orientation.w = quaternion[0]
+        msg.pose.orientation.x = quaternion[1]
+        msg.pose.orientation.y = quaternion[2]
+        msg.pose.orientation.z = quaternion[3]
 
         # 发布消息
         self._target_pose_publisher.publish(msg)
@@ -98,11 +102,11 @@ def parse_position_string(pos_str: str) -> List[float]:
     try:
         # 移除方括号并分割
         pos_str = pos_str.strip()
-        if pos_str.startswith('[') and pos_str.endswith(']'):
+        if pos_str.startswith("[") and pos_str.endswith("]"):
             pos_str = pos_str[1:-1]
 
         # 分割并转换为浮点数
-        positions = [float(x.strip()) for x in pos_str.split(',')]
+        positions = [float(x.strip()) for x in pos_str.split(",")]
         return positions
     except ValueError as e:
         print(f"位置解析错误: {e}")
@@ -113,9 +117,9 @@ def parse_position_string(pos_str: str) -> List[float]:
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(
-        description='设置Isaac位置控制节点的目标位置',
+        description="设置Isaac位置控制节点的目标位置",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''
+        epilog="""
 示例用法:
   # 设置2D位置 (默认高度1.5m，偏航0°)
   python3 set_target_pos.py --position 2.0,1.0
@@ -130,35 +134,26 @@ def main():
   - 位置使用NED坐标系 (北-东-地)
   - 偏航角为弧度 (逆时针为正)
   - 目标位置由neural_demo功能包处理
-        '''
+        """,
     )
 
     parser.add_argument(
-        '--position', '-p',
+        "--position",
+        "-p",
         type=str,
         required=True,
-        help='目标位置 [x, y, z] 或 "x, y, z" (NED坐标系，单位：米)'
+        help='目标位置 [x, y, z] 或 "x, y, z" (NED坐标系，单位：米)',
     )
 
     parser.add_argument(
-        '--yaw', '-y',
-        type=float,
-        default=0.0,
-        help='目标偏航角 (弧度，默认: 0.0)'
+        "--yaw", "-y", type=float, default=0.0, help="目标偏航角 (弧度，默认: 0.0)"
     )
 
     parser.add_argument(
-        '--frame-id', '-f',
-        type=str,
-        default='world',
-        help='坐标系ID (默认: "world")'
+        "--frame-id", "-f", type=str, default="world", help='坐标系ID (默认: "world")'
     )
 
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='启用详细输出'
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="启用详细输出")
 
     args = parser.parse_args()
 
@@ -175,9 +170,7 @@ def main():
     try:
         # 创建目标设置节点
         node = TargetPositionSetter(
-            position=position,
-            yaw=args.yaw,
-            frame_id=args.frame_id
+            position=position, yaw=args.yaw, frame_id=args.frame_id
         )
 
         if args.verbose:
@@ -194,5 +187,5 @@ def main():
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

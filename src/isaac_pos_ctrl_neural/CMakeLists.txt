@@ -19,6 +19,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   ${PROJECT_NAME}/isaac_pos_ctrl_node.py
   ${PROJECT_NAME}/set_target_pos.py
+  ${PROJECT_NAME}/math_utils.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
