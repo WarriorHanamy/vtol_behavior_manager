@@ -73,6 +73,30 @@ run-ros2:
         --name ros2 \
         ros2
 
+build-px4:
+    bash {{justfile_directory()}}/scripts/build_px4_gazebo.sh
+
+run-px4:
+    docker run -it --gpus all \
+        --rm \
+        --entrypoint bash \
+        --privileged --network host \
+        -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 \
+        -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
+        -v $HOME/.Xauthority:/root/.Xauthority \
+        -v /tmp/.X11-unix:/tmp/.X11-unix \
+        --name px4-gazebo-harmonic-tmp \
+        px4-gazebo-harmonic:v1
+
+enter-px4:
+    docker exec -it px4-gazebo-harmonic-tmp /bin/bash
+
+clean-px4:
+    docker rm -f px4-gazebo-harmonic-tmp
+
+df-docker:
+    docker system df
+
 # attach
 alias a := enter-ros2
 enter-ros2:
