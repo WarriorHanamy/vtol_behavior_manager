@@ -32,10 +32,6 @@ public:
 protected:
   void updateSetpoint(float dt_s) override
   {
-    // echo now time
-    // const Eigen::Vector3f rate{0.0f, 0.0f, 0.0f};
-    // const Eigen::Vector3f thrust{0.0f, 0.0f, -0.5f};
-    // _rates_setpoint->update(rate, thrust);
   }
 
   void onActivate() override

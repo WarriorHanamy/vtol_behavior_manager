@@ -214,6 +214,69 @@ private:
       });
   }
 
+
+  // RC monitoring functions
+  void startRCMonitoring()
+  {
+    _rc_monitor_timer = node().create_wall_timer(
+      std::chrono::milliseconds(50),
+      [this]() { checkRCInput(); });
+  }
+
+  void stopRCMonitoring()
+  {
+    if (_rc_monitor_timer) {
+      _rc_monitor_timer->cancel();
+      _rc_monitor_timer.reset();
+    }
+  }
+
+  void checkRCInput()
+  {
+    // Check RC connection timeout
+    const auto now = node().get_clock()->now();
+    if ((now - _last_rc_update).seconds() > _config.rc_timeout) {
+      return;
+    }
+
+    // Check if we're in Position mode
+    const uint8_t POSCTL_NAV_STATE = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
+    if (_current_nav_state != POSCTL_NAV_STATE) {
+      return;
+    }
+  }
+
+  void handleRCInput(const px4_msgs::msg::ManualControlSetpoint::SharedPtr msg)
+  {
+    // Only process if in Position mode
+    const uint8_t POSCTL_NAV_STATE = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
+
+    static bool button_pressed_last = false;
+
+    if (_current_nav_state != POSCTL_NAV_STATE) {
+      return;
+    }
+
+    // Check button press (Button=1024 -> aux1 > 0.8)
+    bool button_pressed_now = (msg->buttons == 1024);
+
+    if (button_pressed_now && !button_pressed_last) {
+      // Rising edge detected - trigger Neural!
+      stopRCMonitoring();
+      runState(State::NeuralCtrl, px4_ros2::Result::Success);
+    }
+
+    button_pressed_last = button_pressed_now;  
+  }
+
+  // Utility functions
+  bool isVehicleStill() const
+  {
+    const float velocity_magnitude = _current_velocity.norm();
+    return velocity_magnitude < 0.2f; // 0.2 m/s threshold for "still"
+  }
+
+  // REC: please making config process more accessible, it's too lengthy.
   void loadConfig()
   {
     // Try to load config file from parameter first
@@ -298,66 +361,5 @@ private:
     } catch (const YAML::Exception& e) {
       RCLCPP_ERROR(node().get_logger(), "Failed to load config file '%s': %s", config_file.c_str(), e.what());
     }
-  }
-
-  // RC monitoring functions
-  void startRCMonitoring()
-  {
-    _rc_monitor_timer = node().create_wall_timer(
-      std::chrono::milliseconds(50),
-      [this]() { checkRCInput(); });
-  }
-
-  void stopRCMonitoring()
-  {
-    if (_rc_monitor_timer) {
-      _rc_monitor_timer->cancel();
-      _rc_monitor_timer.reset();
-    }
-  }
-
-  void checkRCInput()
-  {
-    // Check RC connection timeout
-    const auto now = node().get_clock()->now();
-    if ((now - _last_rc_update).seconds() > _config.rc_timeout) {
-      return;
-    }
-
-    // Check if we're in Position mode
-    const uint8_t POSCTL_NAV_STATE = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
-    if (_current_nav_state != POSCTL_NAV_STATE) {
-      return;
-    }
-  }
-
-  void handleRCInput(const px4_msgs::msg::ManualControlSetpoint::SharedPtr msg)
-  {
-    // Only process if in Position mode
-    const uint8_t POSCTL_NAV_STATE = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
-
-    static bool button_pressed_last = false;
-
-    if (_current_nav_state != POSCTL_NAV_STATE) {
-      return;
-    }
-
-    // Check button press (Button=1024 -> aux1 > 0.8)
-    bool button_pressed_now = (msg->buttons == 1024);
-
-    if (button_pressed_now && !button_pressed_last) {
-      // Rising edge detected - trigger Neural!
-      stopRCMonitoring();
-      runState(State::NeuralCtrl, px4_ros2::Result::Success);
-    }
-
-    button_pressed_last = button_pressed_now;  
-  }
-
-  // Utility functions
-  bool isVehicleStill() const
-  {
-    const float velocity_magnitude = _current_velocity.norm();
-    return velocity_magnitude < 0.2f; // 0.2 m/s threshold for "still"
   }
 };
