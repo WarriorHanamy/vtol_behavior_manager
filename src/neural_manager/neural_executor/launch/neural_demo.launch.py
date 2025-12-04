@@ -51,8 +51,8 @@ def generate_launch_description():
     # Neural Demo Executor Node
     executor_node = Node(
         package="neural_executor",
-        executable="neural_demo_node",
-        name="neural_demo_node",
+        executable="neural_executor_node",
+        name="neural_executor_node",
         output="screen",
         parameters=[common_params],
         emulate_tty=True,

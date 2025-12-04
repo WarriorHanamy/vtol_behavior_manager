@@ -17,8 +17,8 @@
 
 // Compile-time control mode selection
 // #define USE_GOTO_CTRL
-// #define USE_RATES_CTRL
-#define USE_ACC_RATES_CTRL
+#define USE_RATES_CTRL
+// #define USE_ACC_RATES_CTRL
 
 // Compile-time check: Ensure exactly one control mode is defined
 #if defined(USE_GOTO_CTRL) + defined(USE_RATES_CTRL) + defined(USE_ACC_RATES_CTRL) != 1
@@ -28,7 +28,7 @@
 // Neural control setpoint types - Type as Documentation
 using NeuralGotoSetpoint = geometry_msgs::msg::PoseStamped;
 using NeuralRatesSetpoint = px4_msgs::msg::VehicleRatesSetpoint;
-using NeuralAccRatesSetpoint = px4_msgs::msg::VehicleAccRatesSetpoint;
+using NeuralAccRatesSetpoint = px4_msgs::msg::VehicleThrustAccSetpoint;
 
 // Unified setpoint type using std::variant for type-safe dispatching
 using NeuralControlSetpoint = std::variant<
@@ -154,29 +154,32 @@ private:
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr _stop_neural_ctrl_sub;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr _start_neural_ctrl_pub;
 
+  template<typename T>
+  void createSubscriptionHelper(
+      typename rclcpp::Subscription<T>::SharedPtr& sub_ptr,
+      const std::string& mode_name)
+  {
+    sub_ptr = _node.create_subscription<T>(
+        "/neural/setpoint", 10,
+        [this](const typename T::SharedPtr msg) {
+          _neural_setpoint = *msg;
+          _neural_setpoint_timestamp = _node.get_clock()->now();
+          _has_neural_setpoint = true;
+        });
+    RCLCPP_INFO(_node.get_logger(), "Neural: Subscribed to %s setpoint", mode_name.c_str());
+  }
+
   void subscribeToNeuralSetpoint()
   {
-    auto createSubscription = [this]<typename T>(
-        auto& sub_ptr, const std::string& mode_name) {
-      sub_ptr = _node.create_subscription<T>(
-          "/neural/setpoint", 10,
-          [this](const typename T::SharedPtr msg) {
-            _neural_setpoint = *msg;
-            _neural_setpoint_timestamp = _node.get_clock()->now();
-            _has_neural_setpoint = true;
-          });
-      RCLCPP_INFO(_node.get_logger(), "Neural: Subscribed to %s setpoint", mode_name.c_str());
-    };
-
     switch (_setpoint_type) {
       case NeuralSetpointType::Goto:
-        createSubscription.template operator()<NeuralGotoSetpoint>(_goto_sub, "Goto");
+        createSubscriptionHelper<NeuralGotoSetpoint>(_goto_sub, "Goto");
         break;
       case NeuralSetpointType::Rates:
-        createSubscription.template operator()<NeuralRatesSetpoint>(_rates_sub, "Rates");
+        createSubscriptionHelper<NeuralRatesSetpoint>(_rates_sub, "Rates");
         break;
       case NeuralSetpointType::AccRates:
-        createSubscription.template operator()<NeuralAccRatesSetpoint>(_acc_rates_sub, "AccRates");
+        createSubscriptionHelper<NeuralAccRatesSetpoint>(_acc_rates_sub, "AccRates");
         break;
     }
   }
@@ -219,9 +222,9 @@ private:
     }
 
     const Eigen::Vector3f target{
-        setpoint.pose.position.x,
-        setpoint.pose.position.y,
-        setpoint.pose.position.z};
+        static_cast<float>(setpoint.pose.position.x),
+        static_cast<float>(setpoint.pose.position.y),
+        static_cast<float>(setpoint.pose.position.z)};
 
     _goto_setpoint->update(target, std::nullopt, 2.0f, 2.0f, std::nullopt);
   }
@@ -238,10 +241,10 @@ private:
 
   inline void applyAccRatesSetpoint(const NeuralAccRatesSetpoint& setpoint)
   {
-    const Eigen::Vector3f rates_sp{
-        setpoint.rates[0],
-        setpoint.rates[1],
-        setpoint.rates[2]};
-    _acc_rates_setpoint->update(setpoint.thrust_acc_sp, rates_sp);
+  const Eigen::Vector3f rates_sp{
+    setpoint.rates_sp[0],
+    setpoint.rates_sp[1],
+    setpoint.rates_sp[2]};
+  _acc_rates_setpoint->update(setpoint.thrust_acc_sp, rates_sp);
   }
 };

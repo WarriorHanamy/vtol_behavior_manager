@@ -218,7 +218,7 @@ class IsaacPositionControlNode(rclpy.node.Node):
         """初始化发布者"""
         # 控制指令发布者
         self._rates_publisher = self.create_publisher(
-            VehicleRatesSetpoint, "/neural/rates_sp", 10
+            VehicleRatesSetpoint, "/neural/setpoint", 10
         )
 
         self._controller_heartbeat_publisher = self.create_publisher(
