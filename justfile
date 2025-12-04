@@ -1,4 +1,5 @@
 set shell := ["bash", "-c"]
+export PATH := "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:~/.cargo/bin"
 
 example:
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
