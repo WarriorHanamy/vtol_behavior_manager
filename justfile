@@ -69,7 +69,9 @@ run-ros2:
         -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
         -v $HOME/.Xauthority:/home/ros/.Xauthority \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
-        -v {{justfile_directory()}}:/home/ros/ros2_ws \
+        -v {{justfile_directory()}}/src:/home/ros/ros2_ws/src \
+        -v {{justfile_directory()}}/scripts:/home/ros/ros2_ws/scripts \
+        -v {{justfile_directory()}}/justfile:/home/ros/ros2_ws/justfile \
         --name ros2 \
         ros2
 

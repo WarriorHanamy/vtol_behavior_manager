@@ -26,6 +26,16 @@ RUN useradd -m -u 1000 ros && \
 RUN mkdir -p /home/ros/ros2_ws
 RUN chown -R ros:ros /home/ros/ros2_ws
 
+# Copy project files
+COPY --chown=ros:ros src /home/ros/ros2_ws/src
+COPY --chown=ros:ros scripts /home/ros/ros2_ws/scripts
+COPY --chown=ros:ros justfile /home/ros/ros2_ws/justfile
+
 USER ros
-WORKDIR /home/ros
-RUN mkdir trash_bin
+WORKDIR /home/ros/ros2_ws
+
+# Set environment variables
+ENV ROS_DISTRO=humble
+
+# Execute just b command (full build)
+RUN just b
