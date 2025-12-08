@@ -68,6 +68,17 @@ public:
   {
     if (previous_result != px4_ros2::Result::Success) {
       RCLCPP_ERROR(node().get_logger(), "State failed: %s", resultToString(previous_result));
+
+      // If takeoff failed, fallback to Position mode and wait for RC trigger
+      if (state == State::TakingOff) {
+        RCLCPP_WARN(node().get_logger(), "Takeoff failed, switching to Position mode to wait for RC trigger");
+        runState(State::Position, px4_ros2::Result::Success);
+        return;
+      }
+
+      // For other state failures, also fallback to Position mode
+      RCLCPP_WARN(node().get_logger(), "State operation failed, falling back to Position mode");
+      runState(State::Position, px4_ros2::Result::Success);
       return;
     }
 
