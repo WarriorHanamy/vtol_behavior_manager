@@ -35,15 +35,7 @@ def generate_launch_description():
 
     common_params = {
         "config_file": LaunchConfiguration("config_file"),
-        "position_timeout": 1.0,
-        "rc_timeout": 0.5,
-        "target_tolerance": 0.5,
-        "still_wait_time": 5.0,
-        "max_velocity": 8.0,
-        "goto_cmd_target_tolerance": 0.5,
-        "goto_cmd_position_timeout": 1.0,
-        "goto_cmd_target_timeout": 2.0,
-        "goto_cmd_max_velocity": 8.0,
+        "neural_setpoint_timeout": 0.05,
         # don't use sim time when using px4 gazebo SITL
         "use_sim_time": False,
     }
