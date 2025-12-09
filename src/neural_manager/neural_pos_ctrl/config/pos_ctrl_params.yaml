@@ -4,12 +4,12 @@
 # 模型配置
 model:
   # ONNX模型文件路径 (相对于包share目录)
-  onnx_path: "models/isaac_pos_ctrl.onnx"
+  onnx_path: "models/policy.onnx"
 
   # 模型输入输出信息
-  input_shape: [1, 20]  # 批次大小 x 观测维度
+  input_shape: [1, 16]  # 批次大小 x 观测维度
   output_shape: [1, 4]  # 批次大小 x 动作维度
-  input_name: "observations"
+  input_name: "obs"
   output_name: "actions"
 
 # 控制系统配置
@@ -31,25 +31,22 @@ action_mapping:
   # 油门控制: [-1, 1] → [0, 1]
   throttle:
     input_range: [-1.0, 1.0]
-    output_range: [0.0, 1.0]
+    output_range: [0.0, 19.6]
     description: "油门指令 (0=最低推力, 1=最大推力)"
 
-  # 滚转角速度: [-1, 1] → [-10, 10] rad/s
   roll_rate:
     input_range: [-1.0, 1.0]
-    output_range: [-10.0, 10.0]
+    output_range: [-3.0, 3.0]
     description: "滚转角速度指令"
 
-  # 俯仰角速度: [-1, 1] → [-10, 10] rad/s
   pitch_rate:
     input_range: [-1.0, 1.0]
-    output_range: [-10.0, 10.0]
+    output_range: [-3.0, 3.0]
     description: "俯仰角速度指令"
 
-  # 偏航角速度: [-1, 1] → [-5, 5] rad/s
   yaw_rate:
     input_range: [-1.0, 1.0]
-    output_range: [-5.0, 5.0]
+    output_range: [-3.0, 3.0]
     description: "偏航角速度指令"
 
 # 目标位置配置
@@ -57,15 +54,6 @@ target:
   # 固定目标位置 (NED坐标系: 北-东-地)
   fixed_position: [0.0, 0.0, 1.5]  # [北向, 东向, 地下] 米
   fixed_yaw: 0.0  # 目标偏航角 (弧度)
-
-  # 到达容差 (米)
-  tolerance: 0.5
-
-  # 目标位置范围 (用于随机目标)
-  position_range:
-    x: [-3.0, 3.0]    # 北向范围
-    y: [-3.0, 3.0]    # 东向范围
-    z: [0.5, 3.0]      # 地下范围
 
 # 输入饱和限制 (防止数值不稳定)
 input_saturation:
@@ -101,85 +89,15 @@ input_saturation:
     min: -1.0
     max: 1.0
 
-# 观测分量信息 (基于drone_pos_ctrl_env_cfg.py)
-observation_components:
-  lin_vel:
-    shape: [3]
-    description: "机体坐标系线速度 [vx, vy, vz]"
-    range: "normalized"
-    units: "m/s"
-
-  projected_gravity_b:
-    shape: [3]
-    description: "机体坐标系重力投影 [gx, gy, gz]"
-    range: "normalized"
-    units: "g"
-
-  ang_vel:
-    shape: [3]
-    description: "机体坐标系角速度 [wx, wy, wz]"
-    range: "normalized"
-    units: "rad/s"
-
-  current_yaw_direction:
-    shape: [2]
-    description: "当前偏航方向单位向量 [cos(yaw), sin(yaw)]"
-    range: "[-1, 1]"
-    units: ""
-
-  target_pos_b:
-    shape: [3]
-    description: "目标位置向量(机体坐标系) [dx, dy, dz]"
-    range: "distance"
-    units: "m"
-
-  target_yaw:
-    shape: [2]
-    description: "目标偏航方向单位向量 [cos(target_yaw), sin(target_yaw)]"
-    range: "[-1, 1]"
-    units: ""
-
-  actions:
-    shape: [4]
-    description: "上一时刻动作 [throttle, roll_rate, pitch_rate, yaw_rate]"
-    range: "[-1, 1]"
-    units: "mixed"
-
-# 网络架构信息
-network:
-  algorithm: "PPO"
-  hidden_layers: [256, 256, 256]
-  activation: "ELU"
-  output_activation: "tanh"
-
-# PX4坐标系配置
-coordinate_systems:
-  # PX4使用NED(北-东-地)坐标系
-  world_frame: "NED"
-  body_frame: "FRD"  # 前-右-下
-
-  # 重力向量 (NED坐标系)
-  gravity_world: [0.0, 0.0, 9.81]  # m/s²
-
-  # 坐标转换说明
-  transformations:
-    input: "Isaac ENU → PX4 NED → Body Frame"
-    output: "Body Frame → PX4 Rates Setpoint"
 
 # 调试配置
 debug:
   # 是否启用调试模式
   enabled: false
-
-  # 是否启用输入饱和
-  enable_input_saturation: true
-
   # 是否打印详细状态信息
   verbose_logging: false
-
   # 是否发布调试话题
   debug_topics: false
-
   # 统计信息发布间隔 (秒)
   stats_interval: 5.0
 

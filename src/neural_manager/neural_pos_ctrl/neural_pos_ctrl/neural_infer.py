@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import time
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +26,7 @@ import numpy as np
 import rclpy
 import rclpy.node
 import rclpy.qos
-from px4_msgs.msg import VehicleRatesSetpoint, VehicleOdometry
+from px4_msgs.msg import VehicleThrustAccSetpoint, VehicleOdometry
 from std_msgs.msg import Bool
 
 from neural_pos_ctrl.math_utils import (
@@ -37,32 +38,26 @@ from neural_pos_ctrl.math_utils import (
 
 try:
     import onnxruntime as ort
-
-    ONNX_AVAILABLE = True
 except ImportError as e:
-    ONNX_AVAILABLE = False
-    print(f"警告: ONNX依赖不可用: {e}")
+    print(f"[FATAL] Critical dependency missing: onnxruntime not found. Error: {e}")
+    print("This node requires ONNX Runtime for neural network inference. Exiting...")
+    sys.exit(1)  # 非0状态码表示异常退出
 
 
-class IsaacPositionControlNode(rclpy.node.Node):
+class NeuralControlNode(rclpy.node.Node):
     """Isaac位置控制神经网络推理节点"""
 
     def __init__(self):
         """初始化推理节点"""
-        super().__init__("isaac_pos_ctrl_node", allow_undeclared_parameters=True)
+        super().__init__("neural_pos_ctrl_node", allow_undeclared_parameters=True)
 
-        # 状态变量
+        # 监控信息
         self._model_loaded = False
-        self._inference_session = None
+        self._inference_session: ort.InferenceSession | None = None
         self._active = False
         self._last_odom_sample_time = 0.0
         self._last_odom_receive_time = 0.0
         self._first_odom_received = False  # 标记是否收到第一帧
-        self._last_action = np.array(
-            [0.0, 0.0, 0.0, 0.0]
-        )  # [throttle, roll_rate, pitch_rate, yaw_rate]
-        self._target_position = np.array([0.0, 0.0, 1.5])  # NED坐标系 [x, y, z]
-        self._target_yaw = 0.0  # 目标偏航角 (弧度)
         self._init_success = False
 
         # 接收间隔统计
@@ -81,7 +76,6 @@ class IsaacPositionControlNode(rclpy.node.Node):
             self.init_publishers()
             self.init_subscribers()
             self.init_timers()
-
             self._init_success = True
             self.get_logger().info("🚀 Isaac位置控制节点初始化成功!")
         else:
@@ -91,51 +85,27 @@ class IsaacPositionControlNode(rclpy.node.Node):
         """设置ROS2参数"""
         # 模型参数
         self.declare_parameter(
-            "model_path", "share/neural_pos_ctrl/models/isaac_pos_ctrl.onnx"
+            "model_path", "invald_initialization.onnx"
         )
-
-        self.declare_parameter("control_rate", 50.0)
-
-        # 目标参数
+        self.declare_parameter("control_rate", 100.0)
         self.declare_parameter("target_position", [0.0, 0.0, 1.5])
-
         self.declare_parameter("target_yaw", 0.0)
 
-        # 控制限制参数
-        self.declare_parameter("enable_input_saturation", True)
-
-        # 角速度限制参数
-        self.declare_parameter("max_roll_pitch_rate", 10.0)
-
-        self.declare_parameter("max_yaw_rate", 5.0)
-
-        # 调试参数
-        self.declare_parameter("debug_mode", False)
 
     def load_parameters(self):
-        """加载ROS2参数"""
-        # 模型路径
         self._model_path = Path(self.get_parameter("model_path").value)
-
         # 控制参数
         self._control_rate = self.get_parameter("control_rate").value
         self._control_period = 1.0 / self._control_rate
-
         # 目标参数
         target_pos = self.get_parameter("target_position").value
         self._target_position = np.array(target_pos, dtype=np.float32)  # NED坐标系
         self._target_yaw = self.get_parameter("target_yaw").value
 
-        # 其他参数
-        self._enable_input_saturation = self.get_parameter(
-            "enable_input_saturation"
-        ).value
-        self._debug_mode = self.get_parameter("debug_mode").value
 
         # 角速度限制参数
         self._max_roll_pitch_rate = self.get_parameter("max_roll_pitch_rate").value
         self._max_yaw_rate = self.get_parameter("max_yaw_rate").value
-
         self.get_logger().info("参数加载完成:")
         self.get_logger().info(f"  模型路径: {self._model_path}")
         self.get_logger().info(f"  控制频率: {self._control_rate:.1f} Hz")
@@ -147,78 +117,58 @@ class IsaacPositionControlNode(rclpy.node.Node):
         self.get_logger().info(f"  最大偏航角速度: {self._max_yaw_rate:.1f} rad/s")
 
     def init_model(self) -> bool:
-        """初始化ONNX模型"""
-        if not ONNX_AVAILABLE:
-            self.get_logger().error("ONNX Runtime不可用，无法加载模型")
+        if not self._model_path.exists():
+            return False
+        self.get_logger().info(f"加载ONNX模型: {self._model_path}")
+
+        # GPU优先，如果可用则使用，否则CPU
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        self._inference_session = ort.InferenceSession(
+            str(self._model_path), providers=providers
+        )
+
+        # 获取模型输入输出信息
+        input_info = self._inference_session.get_inputs()[0]
+        output_info = self._inference_session.get_outputs()[0]
+
+        self._input_name = input_info.name
+        self._output_name = output_info.name
+        self._input_shape = input_info.shape
+        self._output_shape = output_info.shape
+
+        self.get_logger().info("模型信息:")
+        self.get_logger().info(
+            f"  输入: {self._input_name}, 形状: {self._input_shape}"
+        )
+        self.get_logger().info(
+            f"  输出: {self._output_name}, 形状: {self._output_shape}"
+        )
+
+        # 验证输入形状 (应该为 [1, 20])
+        if not (len(self._input_shape) == 2 and self._input_shape[1] == 20):
+            self.get_logger().error(
+                f"输入形状不匹配，期望 [1, 20]，实际 {self._input_shape}"
+            )
             return False
 
-        try:
-            # 检查模型文件
-            if not self._model_path.exists():
-                # 尝试在包共享目录中查找
-                package_share = (
-                    Path(__file__).parent.parent / "share" / "neural_pos_ctrl"
-                )
-                model_path = package_share / "models" / self._model_path.name
-                if model_path.exists():
-                    self._model_path = model_path
-                else:
-                    self.get_logger().error(f"模型文件不存在: {self._model_path}")
-                    return False
-
-            # 创建ONNX推理会话
-            self.get_logger().info(f"加载ONNX模型: {self._model_path}")
-
-            # GPU优先，如果可用则使用，否则CPU
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-            self._inference_session = ort.InferenceSession(
-                str(self._model_path), providers=providers
+        # 验证输出形状 (应该为 [1, 4])
+        if not (len(self._output_shape) == 2 and self._output_shape[1] == 4):
+            self.get_logger().error(
+                f"输出形状不匹配，期望 [1, 4]，实际 {self._output_shape}"
             )
-
-            # 获取模型输入输出信息
-            input_info = self._inference_session.get_inputs()[0]
-            output_info = self._inference_session.get_outputs()[0]
-
-            self._input_name = input_info.name
-            self._output_name = output_info.name
-            self._input_shape = input_info.shape
-            self._output_shape = output_info.shape
-
-            self.get_logger().info("模型信息:")
-            self.get_logger().info(
-                f"  输入: {self._input_name}, 形状: {self._input_shape}"
-            )
-            self.get_logger().info(
-                f"  输出: {self._output_name}, 形状: {self._output_shape}"
-            )
-
-            # 验证输入形状 (应该为 [1, 20])
-            if not (len(self._input_shape) == 2 and self._input_shape[1] == 20):
-                self.get_logger().error(
-                    f"输入形状不匹配，期望 [1, 20]，实际 {self._input_shape}"
-                )
-                return False
-
-            # 验证输出形状 (应该为 [1, 4])
-            if not (len(self._output_shape) == 2 and self._output_shape[1] == 4):
-                self.get_logger().error(
-                    f"输出形状不匹配，期望 [1, 4]，实际 {self._output_shape}"
-                )
-                return False
-
-            self._model_loaded = True
-            self.get_logger().info("✅ ONNX模型加载成功!")
-            return True
-
-        except Exception as e:
-            self.get_logger().error(f"模型加载失败: {e}")
             return False
+
+        self._model_loaded = True
+        self.get_logger().info("✅ ONNX模型加载成功!")
+        return True
+
+
 
     def init_publishers(self):
         """初始化发布者"""
         # 控制指令发布者
-        self._rates_publisher = self.create_publisher(
-            VehicleRatesSetpoint, "/neural/setpoint", 10
+        self._acc_rates_publisher = self.create_publisher(
+            VehicleThrustAccSetpoint, "/neural/setpoint", 10
         )
 
         self._controller_heartbeat_publisher = self.create_publisher(
@@ -250,9 +200,7 @@ class IsaacPositionControlNode(rclpy.node.Node):
             self._control_period, self.control_timer_callback
         )
 
-        # 调试信息定时器 (每5秒打印一次状态)
-        if self._debug_mode:
-            self._debug_timer = self.create_timer(5.0, self.debug_callback)
+        self._debug_timer = self.create_timer(5.0, self.debug_callback)
 
         self.get_logger().info(f"定时器已初始化，控制周期: {self._control_period:.3f}s")
 
@@ -386,10 +334,8 @@ class IsaacPositionControlNode(rclpy.node.Node):
         """调试信息回调函数"""
         if not self._init_success:
             return
-
         status = "激活" if self._active else "停用"
         data_age = (time.time() * 1e6 - self._last_odom_sample_time) / 1000.0
-
         self.get_logger().info("🔍 调试状态:")
         self.get_logger().info(f"  神经网络控制: {status}")
         self.get_logger().info(f"  数据延迟: {data_age:.1f} ms")
@@ -409,7 +355,6 @@ class IsaacPositionControlNode(rclpy.node.Node):
         4. current_yaw_direction (2维): [cos(yaw), sin(yaw)]
         5. target_pos_b (3维): 目标位置(机体坐标系)
         6. target_yaw (2维): 目标偏航方向
-        7. actions (4维): 上一时刻动作
 
         Args:
             msg: VehicleOdometry消息
@@ -446,13 +391,11 @@ class IsaacPositionControlNode(rclpy.node.Node):
             # 在NED坐标系中重力为[0, 0, 9.81]，在机体坐标系中的投影
             gravity_world = np.array([0.0, 0.0, 9.81])  # NED坐标系的向上重力
             gravity_b = R @ gravity_world  # 转换到机体坐标系
-            gravity_b_normalized = gravity_b / 9.81  # 归一化
+            gra_dir_b = gravity_b / 9.81  # 归一化
 
             # 3. ang_vel (3维) - 已经在机体坐标系中
             ang_vel_b = angular_velocity
 
-            # 4. current_yaw_direction (2维) - 机体x轴在世界水平面的投影方向
-            # 获取机体到世界的旋转矩阵
             roll, pitch, yaw = quaternion_to_euler(quaternion)
             R_body_to_world = rotation_matrix_body_to_ned(roll, pitch, yaw)
 
@@ -468,40 +411,30 @@ class IsaacPositionControlNode(rclpy.node.Node):
                 # 如果几乎垂直，使用原方法作为fallback
                 current_yaw_dir = np.array([math.cos(yaw), math.sin(yaw)])
 
-            # 5. target_pos_b (3维) - 目标位置在机体坐标系中的向量
-            # 计算世界坐标系到机体坐标系的变换
             target_world = self._target_position
             current_world = position
             to_target = target_world - current_world
 
-            # 使用四元数旋转向量到机体坐标系 (注意四元数约定)
-            target_pos_b = quat_rotate_inverse(quaternion, to_target)
+            to_target_pos_b = quat_rotate_inverse(quaternion, to_target)
 
-            # 6. target_yaw (2维) - 目标偏航方向的单位向量
             target_yaw_dir = np.array(
                 [math.cos(self._target_yaw), math.sin(self._target_yaw)]
             )
 
-            # 7. actions (4维) - 上一时刻的动作
-            prev_actions = self._last_action
-
-            # 组装20维观测向量
             observation = np.concatenate(
                 [
                     lin_vel_b,  # 3维: 机体线速度 [vx, vy, vz]
-                    gravity_b_normalized,  # 3维: 机体重力投影 [gx, gy, gz]
+                    gra_dir_b,  # 3维: 机体重力投影 [gx, gy, gz]
                     ang_vel_b,  # 3维: 机体角速度 [wx, wy, wz]
                     current_yaw_dir,  # 2维: 当前偏航方向 [cos(yaw), sin(yaw)]
-                    target_pos_b,  # 3维: 目标位置(机体) [dx, dy, dz]
+                    to_target_pos_b,  # 3维: 目标位置(机体) [dx, dy, dz]
                     target_yaw_dir,  # 2维: 目标偏航方向 [cos(target_yaw), sin(target_yaw)]
-                    prev_actions,  # 4维: 上一时刻动作 [throttle, roll_rate, pitch_rate, yaw_rate]
                 ],
                 dtype=np.float32,
             )
 
             # 应用输入饱和限制
-            if self._enable_input_saturation:
-                observation = self.apply_input_saturation(observation)
+            observation = self.apply_input_saturation(observation)
 
             return observation
 
@@ -510,7 +443,6 @@ class IsaacPositionControlNode(rclpy.node.Node):
             return None
 
     def apply_input_saturation(self, observation: np.ndarray) -> np.ndarray:
-        """应用输入饱和限制以防止数值不稳定"""
         # 线速度限制 (±10 m/s)
         observation[0:3] = np.clip(observation[0:3], -10.0, 10.0)
 
@@ -542,10 +474,12 @@ class IsaacPositionControlNode(rclpy.node.Node):
 
             # ONNX推理
             ort_inputs = {self._input_name: input_data}
-            ort_outputs = self._inference_session.run(None, ort_inputs)
+            ort_outputs = self._inference_session.run(
+                [self._output_name], ort_inputs
+            )
 
             # 提取输出
-            action = ort_outputs[0][0]  # 形状 (4,)
+            action = ort_outputs[0][0]  
 
             # 应用输出饱和限制
             action = np.clip(action, -1.0, 1.0)
@@ -558,65 +492,19 @@ class IsaacPositionControlNode(rclpy.node.Node):
 
     def publish_control_command(self, action: np.ndarray):
         """发布控制指令"""
-        try:
-            msg = VehicleRatesSetpoint()
-            msg.timestamp = int(time.time() * 1e6)  # 微秒
+        msg = VehicleThrustAccSetpoint()
+        msg.timestamp = int(time.time() * 1e6)  # 微秒
 
-            # 映射动作输出到PX4控制范围
-            # action[0]: throttle [-1, 1] → throttle [0, 1]
-            throttle = (action[0] + 1.0) / 2.0  # 映射到[0, 1]
-            throttle = np.clip(throttle, 0.0, 1.0)
+        roll_rate = action[1] * self._max_roll_pitch_rate
+        pitch_rate = action[2] * self._max_roll_pitch_rate
+        yaw_rate = action[3] * self._max_yaw_rate
 
-            # action[1:3]: roll/pitch rate [-1, 1] → rate [-max_roll_pitch_rate, max_roll_pitch_rate] rad/s
-            roll_rate = action[1] * self._max_roll_pitch_rate
-            pitch_rate = action[2] * self._max_roll_pitch_rate
-
-            # action[3]: yaw rate [-1, 1] → rate [-max_yaw_rate, max_yaw_rate] rad/s
-            yaw_rate = action[3] * self._max_yaw_rate
-
-            # 设置消息字段
-            msg.roll = float(roll_rate)
-            msg.pitch = float(pitch_rate)
-            msg.yaw = float(yaw_rate)
-
-            # 检查throttle的值
-            # self.get_logger().warn(f"计算的油门值: {throttle:.3f}")
-
-            # 推力向量: [thrust_x, thrust_y, thrust_z] 在机体NED坐标系
-            msg.thrust_body[0] = 0.0
-            msg.thrust_body[1] = 0.0
-            msg.thrust_body[2] = -throttle
-            msg.reset_integral = False
-
-            self._rates_publisher.publish(msg)
-
-            if self._debug_mode:
-                self.get_logger().debug(
-                    f"控制指令: 油门={throttle:.3f}, "
-                    f"俯仰={pitch_rate:.3f}, 横滚={roll_rate:.3f}, 偏航={yaw_rate:.3f}"
-                )
-
-        except Exception as e:
-            self.get_logger().error(f"控制指令发布错误: {e}")
-
-    def publish_stop_command(self):
-        """发布停止控制指令"""
-        try:
-            msg = VehicleRatesSetpoint()
-            msg.timestamp = int(time.time() * 1e6)
-            msg.roll = 0.0
-            msg.pitch = 0.0
-            msg.yaw = 0.0
-            msg.thrust_body[0] = 0.0
-            msg.thrust_body[1] = 0.0
-            msg.thrust_body[2] = 0.0
-            msg.reset_integral = False
-
-            self._rates_publisher.publish(msg)
-            self.get_logger().info("发布停止控制指令")
-
-        except Exception as e:
-            self.get_logger().error(f"停止指令发布错误: {e}")
+        # 设置消息字段
+        msg.rates_sp[0] = roll_rate
+        msg.rates_sp[1] = pitch_rate
+        msg.rates_sp[2] = yaw_rate
+        msg.thrust_acc_sp = 9.8
+        self._acc_rates_publisher.publish(msg)
 
 
 def main(args=None):
@@ -624,7 +512,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     try:
-        node = IsaacPositionControlNode()
+        node = NeuralControlNode()
 
         if node._init_success:
             rclpy.spin(node)
