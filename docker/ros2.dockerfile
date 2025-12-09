@@ -17,7 +17,7 @@ RUN wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg 
     
 
 # Install Python packages (ONNX Runtime)
-RUN pip3 install --no-cache-dir onnxruntime numpy
+RUN pip3 install --no-cache-dir onnxruntime numpy hydra-core
 
 RUN useradd -m -u 1000 ros && \
     echo "ros ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
@@ -42,3 +42,4 @@ RUN just b
 
 RUN echo "source /home/ros/ros2_ws/install/setup.bash" >> \
     /home/ros/.bashrc
+ENV INFER_WORKSPACE=/home/ros/ros2_ws

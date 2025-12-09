@@ -11,15 +11,10 @@ neural-mode:
     source {{justfile_directory()}}/install/setup.sh && \
     ros2 launch neural_executor neural_demo.launch.py
 
-neural-inference:
+neural-infer:
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
     source {{justfile_directory()}}/install/setup.sh && \
-    ros2 launch neural_pos_ctrl pos_ctrl_launch.py
-
-fake-network:
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    source {{justfile_directory()}}/install/setup.sh && \
-    ros2 launch fake_network fake_network_node.launch.py
+    python3 src/neural_manager/neural_pos_ctrl/neural_infer.py
 
 config-px4msgs:
     bash {{justfile_directory()}}/scripts/config_px4msgs.sh
@@ -130,9 +125,3 @@ develop-ros2:
         -v {{justfile_directory()}}/justfile:/home/ros/ros2_ws/justfile \
         --name ros2 \
         ros2
-
-
-try:
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    source {{justfile_directory()}}/install/setup.sh && \
-    python3 src/neural_manager/neural_pos_ctrl/neural_infer.py

@@ -52,7 +52,7 @@ class NeuralControlNode(rclpy.node.Node):
         # 监控信息
         self._model_loaded = False
         self._inference_session: ort.InferenceSession | None = None
-        self._active = False
+        self._active = True
         self._last_odom_sample_time = 0.0
         self._last_odom_receive_time = 0.0
         self._first_odom_received = False  # 标记是否收到第一帧
@@ -124,8 +124,8 @@ class NeuralControlNode(rclpy.node.Node):
         )
 
         # 验证输入形状
-        expected_input_shape = (1, 16)
-        expected_output_shape = (1, 4)
+        expected_input_shape = [1, 16]
+        expected_output_shape = [1, 4]
 
         if self._input_shape != expected_input_shape:
             self.get_logger().error(
@@ -172,12 +172,12 @@ class NeuralControlNode(rclpy.node.Node):
             rclpy.qos.qos_profile_sensor_data,
         )
 
-        self._mode_subscriber = self.create_subscription(
-            Bool,
-            self.cfg.node.mode_topic,
-            self.mode_callback,
-            10
-        )
+        # self._mode_subscriber = self.create_subscription(
+        #     Bool,
+        #     self.cfg.node.mode_topic,
+        #     self.mode_callback,
+        #     10
+        # )
 
         self.get_logger().info("订阅者已初始化")
 
@@ -275,7 +275,7 @@ class NeuralControlNode(rclpy.node.Node):
             return
 
         observation = self.process_odometry_to_observation(msg)
-
+        self.print_observation(observation)
         if observation is None:
             self.get_logger().warn("观测数据处理失败")
             return
@@ -286,17 +286,11 @@ class NeuralControlNode(rclpy.node.Node):
         inference_time = (time.perf_counter() - start_time) * 1000.0  # 转换为毫秒
 
         if action is not None:
-            # 更新上一时刻动作
-            self._last_action = action
-
             # 立即发布控制指令
-            self.publish_control_command(self._last_action)
-
+            self.publish_control_command(action)
             # 输出推理耗时（如果启用性能监控）
             if self.cfg.debug.measure_inference_time:
                 self.get_logger().info(f"🧠 神经网络推理耗时: {inference_time:.2f} ms")
-
-            # self._last_odom_sample_time = msg.timestamp_sample
 
     def mode_callback(self, msg: Bool):
         was_active = self._active
@@ -325,13 +319,12 @@ class NeuralControlNode(rclpy.node.Node):
         self.get_logger().info(f"  神经网络控制: {status}")
         self.get_logger().info(f"  数据延迟: {data_age:.1f} ms")
         self.get_logger().info(f"  目标位置(NED): {self._target_position}")
-        self.get_logger().info(f"  当前动作: {self._last_action}")
 
     def process_odometry_to_observation(
         self, msg: VehicleOdometry
     ) -> Optional[np.ndarray]:
         """
-        将VehicleOdometry转换为20维观测向量
+        将VehicleOdometry转换为16维观测向量
 
         基于drone_pos_ctrl_env_cfg.py的Policy输入结构：
         1. lin_vel (3维): [vx, vy, vz]
@@ -345,10 +338,9 @@ class NeuralControlNode(rclpy.node.Node):
             msg: VehicleOdometry消息
 
         Returns:
-            20维观测向量或None(数据无效时)
+            16维观测向量或None(数据无效时)
         """
         try:
-            # 提取基本状态
             position = np.array(msg.position, dtype=np.float32)  # NED坐标系 [x, y, z]
             velocity = np.array(
                 msg.velocity, dtype=np.float32
@@ -358,24 +350,13 @@ class NeuralControlNode(rclpy.node.Node):
             )  # 机体frame [wx, wy, wz]
             quaternion = np.array(msg.q, dtype=np.float32)  # [w, x, y, z] Hamilton约定
 
-            # 1. lin_vel (3维) - 转换为机体坐标系
-            if msg.velocity_frame == msg.VELOCITY_FRAME_NED:
-                # NED到机体坐标系的转换 (忽略滚动和俯仰的小角度假设)
-                roll, pitch, yaw = quaternion_to_euler(quaternion)
-
-                # 旋转矩阵 (NED到机体)
-                R = rotation_matrix_ned_to_body(roll, pitch, yaw)
-                lin_vel_b = R @ velocity
-            elif msg.velocity_frame == msg.VELOCITY_FRAME_BODY_FRD:
-                lin_vel_b = velocity
-            else:
-                self.get_logger().warn(f"未知的速度frame: {msg.velocity_frame}")
-                return None
-
-            # 2. projected_gravity_b (3维) - 在机体坐标系中的重力投影
+            # Assuming msg.velocity_frame == msg.VELOCITY_FRAME_NED:
+            roll, pitch, yaw = quaternion_to_euler(quaternion)
+            rot_mat = rotation_matrix_ned_to_body(roll, pitch, yaw)
+            lin_vel_b = rot_mat @ velocity
             # 在NED坐标系中重力为[0, 0, 9.81]，在机体坐标系中的投影
             gravity_world = np.array([0.0, 0.0, 9.81])  # NED坐标系的向上重力
-            gravity_b = R @ gravity_world  # 转换到机体坐标系
+            gravity_b = rot_mat @ gravity_world  # 转换到机体坐标系
             gra_dir_b = gravity_b / 9.81  # 归一化
 
             # 3. ang_vel (3维) - 已经在机体坐标系中
@@ -408,11 +389,11 @@ class NeuralControlNode(rclpy.node.Node):
 
             observation = np.concatenate(
                 [
-                    lin_vel_b,  # 3维: 机体线速度 [vx, vy, vz]
-                    gra_dir_b,  # 3维: 机体重力投影 [gx, gy, gz]
-                    ang_vel_b,  # 3维: 机体角速度 [wx, wy, wz]
-                    current_yaw_dir,  # 2维: 当前偏航方向 [cos(yaw), sin(yaw)]
                     to_target_pos_b,  # 3维: 目标位置(机体) [dx, dy, dz]
+                    lin_vel_b,  # 3维: 机体线速度 [vx, vy, vz]
+                    ang_vel_b,  # 3维: 机体角速度 [wx, wy, wz]
+                    gra_dir_b,  # 3维: 机体重力投影 [gx, gy, gz]
+                    current_yaw_dir,  # 2维: 当前偏航方向 [cos(yaw), sin(yaw)]
                     target_yaw_dir,  # 2维: 目标偏航方向 [cos(target_yaw), sin(target_yaw)]
                 ],
                 dtype=np.float32,
@@ -426,6 +407,32 @@ class NeuralControlNode(rclpy.node.Node):
         except Exception as e:
             self.get_logger().error(f"观测处理错误: {e}")
             return None
+
+    def print_observation(self, observation: np.ndarray):
+        """
+        Print observation vector by semantic order
+
+        Args:
+            observation: 16维观测向量
+        """
+        if observation is None:
+            return
+
+        # 解构观测向量
+        to_target_pos_b = observation[0:3]  # 目标位置(机体)
+        lin_vel_b = observation[3:6]        # 机体线速度
+        ang_vel_b = observation[6:9]        # 机体角速度
+        gra_dir_b = observation[9:12]       # 机体重力投影
+        current_yaw_dir = observation[12:14] # 当前偏航方向
+        target_yaw_dir = observation[14:16]  # 目标偏航方向
+
+        print("📊 观测向量 (16维):")
+        print(f"  🎯 目标位置(机体): [{to_target_pos_b[0]:.3f}, {to_target_pos_b[1]:.3f}, {to_target_pos_b[2]:.3f}]")
+        print(f"  🚁 机体线速度:     [{lin_vel_b[0]:.3f}, {lin_vel_b[1]:.3f}, {lin_vel_b[2]:.3f}]")
+        print(f"  🔄 机体角速度:     [{ang_vel_b[0]:.3f}, {ang_vel_b[1]:.3f}, {ang_vel_b[2]:.3f}]")
+        print(f"  🌍 重力投影:       [{gra_dir_b[0]:.3f}, {gra_dir_b[1]:.3f}, {gra_dir_b[2]:.3f}]")
+        print(f"  🧭 当前偏航方向:   [{current_yaw_dir[0]:.3f}, {current_yaw_dir[1]:.3f}]")
+        print(f"  🎯 目标偏航方向:   [{target_yaw_dir[0]:.3f}, {target_yaw_dir[1]:.3f}]")
 
     def apply_input_saturation(self, observation: np.ndarray) -> np.ndarray:
         if not self.cfg.control.input_saturation.enabled:
@@ -477,16 +484,17 @@ class NeuralControlNode(rclpy.node.Node):
         """发布控制指令"""
         msg = VehicleThrustAccSetpoint()
         msg.timestamp = int(time.time() * 1e6)  # 微秒
-
+        action = action.clip(-1.0, 1.0)
         roll_rate = action[1] * self._max_roll_pitch_rate
         pitch_rate = action[2] * self._max_roll_pitch_rate
         yaw_rate = action[3] * self._max_yaw_rate
 
+        thrust_acc = float(action[0] * 19.6 + 9.8)
         # 设置消息字段
         msg.rates_sp[0] = roll_rate
         msg.rates_sp[1] = pitch_rate
         msg.rates_sp[2] = yaw_rate
-        msg.thrust_acc_sp = self.cfg.control.thrust_acc
+        msg.thrust_acc_sp = thrust_acc
         self._acc_rates_publisher.publish(msg)
 
 
@@ -501,8 +509,6 @@ def main(cfg: DictConfig) -> int:
 
     try:
         node = NeuralControlNode(cfg)
-        print(OmegaConf.to_yaml(cfg))
-
         if node._init_success:
             rclpy.spin(node)
         else:

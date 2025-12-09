@@ -11,7 +11,7 @@ node:
 
 # Model configuration
 model:
-  path: "/home/rec/PX4-ROS2-Bridge/src/neural_manager/neural_pos_ctrl/models/policy.onnx"
+  path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/policy.onnx"
 
   # ONNX runtime settings
   inference:
@@ -37,9 +37,9 @@ control:
   # Input limits
   input_saturation:
     enabled: true
-    linear_velocity: [-10.0, 10.0]      # m/s
-    angular_velocity: [-20.0, 20.0]     # rad/s
-    target_position: [-10.0, 10.0]      # m
+    linear_velocity: [-5.0, 5.0]      # m/s
+    angular_velocity: [-3.0, 3.0]     # rad/s
+    target_position: [-5.0, 5.0]      # m
     actions: [-1.0, 1.0]                # normalized
 
 # Target configuration
@@ -51,10 +51,6 @@ target:
 safety:
   enable_failure_detection: true
   auto_stop_on_timeout: true
-  angular_rate_limits:
-    roll: [-10.0, 10.0]   # rad/s
-    pitch: [-10.0, 10.0]  # rad/s
-    yaw: [-5.0, 5.0]      # rad/s
 
 # Debug settings
 debug:

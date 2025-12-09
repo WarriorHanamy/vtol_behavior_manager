@@ -47,6 +47,7 @@ def quaternion_to_euler(q: np.ndarray) -> Tuple[float, float, float]:
     return roll, pitch, yaw
 
 
+
 def euler_to_quaternion(yaw: float, pitch:float, roll: float) -> np.ndarray:
     """
     欧拉角转换为四元数，内旋顺序ZYX (yaw-pitch-roll)
@@ -140,7 +141,7 @@ def quaternion_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 
     return np.array([w, x, y, z])
 
-
+    
 def quat_rotate(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     """
     使用四元数旋转向量
@@ -192,6 +193,17 @@ def quat_rotate_inverse(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 
     return result[1:4]  # 返回向量部分
 
+def quat_right_multiply_flu_frd(q: np.ndarray) -> np.ndarray:
+    """对齐FLU与FRD坐标系"""
+    q_flu_frd = np.array([0.0, 1.0, 0.0, 0.0])
+    return quaternion_multiply(q, q_flu_frd)
+
+
+def vector_left_multiply_flu_frd(vec: np.ndarray) -> np.ndarray:
+    """对齐FLU与FRD坐标系"""
+    q_flu_frd = np.array([0.0, 1.0, 0.0, 0.0])
+    rot_mat_flu_frd = quaternion_to_rotation_matrix(q_flu_frd)
+    return rot_mat_flu_frd @ vec 
 
 def normalize_quaternion(q: np.ndarray) -> np.ndarray:
     """
