@@ -111,7 +111,7 @@ private:
     // }
     RCLCPP_WARN_THROTTLE(_node.get_logger(), *_node.get_clock(), 1000,
                          "Neural: Applying setpoint...");
-
+    _neural_ctrl.rates_sp[2] = 0.0f;
     applyAccRatesSetpoint(_neural_ctrl);
   }
 

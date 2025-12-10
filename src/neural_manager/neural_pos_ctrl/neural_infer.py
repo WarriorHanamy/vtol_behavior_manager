@@ -36,6 +36,7 @@ from math_utils import (
     quaternion_to_euler,
     rotation_matrix_body_to_ned,
     rotation_matrix_ned_to_body,
+    frd_flu_rotate
 )
 from omegaconf.omegaconf import DictConfig, OmegaConf
 from std_msgs.msg import Bool
@@ -312,7 +313,6 @@ class NeuralControlNode(rclpy.node.Node):
             16维观测向量或None(数据无效时)
         """
         try:
-            quat_flu_frd = np.array([0.0, 1.0, 0.0, 0.0])
             pos = np.array(msg.position, dtype=np.float32)  # NED坐标系 [x, y, z]
             vel = np.array(msg.velocity, dtype=np.float32)  # 参考frame [vx, vy, vz]
             ang_vel_b_frd = np.array(
@@ -323,9 +323,10 @@ class NeuralControlNode(rclpy.node.Node):
 
             gra_dir_w = np.array([0.0, 0.0, 1.0])  # NED坐标系的向上重力
             lin_vel_b_flu = quat_pas_rot(quat_flu, vel)
-            ang_vel_b_flu = quat_pas_rot(quat_flu_frd, ang_vel_b_frd)
+            ang_vel_b_flu = frd_flu_rotate(ang_vel_b_frd)
             gra_dir_b_flu = quat_pas_rot(quat_flu, gra_dir_w)
 
+            # lin_vel_b_flu = np.zeros_like(lin_vel_b_flu)
             target_pos_w = self._target_position
             to_target = target_pos_w - pos
 
@@ -335,6 +336,7 @@ class NeuralControlNode(rclpy.node.Node):
                 [math.cos(self._target_yaw), math.sin(self._target_yaw)]
             )
             current_yaw_dir = np.array([math.cos(0.0), math.sin(0.0)])
+            target_yaw_dir= current_yaw_dir
 
             observation = np.concatenate(
                 [
@@ -476,10 +478,13 @@ class NeuralControlNode(rclpy.node.Node):
         rate_frd = frd_flu_rotate(rate_flu)
 
         # thrust_acc中 up 为正, 角速度则是 FRD系
-        thrust_acc = float(action[0] * 9.8 + 9.8)
+        thrust_acc = float(action[0] * 9.81 + 9.81)
         msg.rates_sp[0] = rate_frd[0]
         msg.rates_sp[1] = rate_frd[1]
         msg.rates_sp[2] = rate_frd[2]
+        # msg.rates_sp[0] = rate_flu[0]
+        # msg.rates_sp[1] = rate_flu[1]
+        # msg.rates_sp[2] = rate_flu[2]
         msg.thrust_acc_sp = thrust_acc
         self._acc_rates_publisher.publish(msg)
 

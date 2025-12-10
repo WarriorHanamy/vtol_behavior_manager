@@ -8,7 +8,7 @@ def sample_uniform_sphere(num_samples):
     """Sample uniformly from S^2 (3D unit sphere) using spherical coordinates"""
     # Sample theta uniformly from [0, 2π] and cos(phi) uniformly from [-1, 1]
     theta = np.random.uniform(0, 2*np.pi, num_samples)
-    cos_phi = np.random.uniform(-1, -1.0, num_samples)
+    cos_phi = np.random.uniform(-1, -0.9, num_samples)
     phi = np.arccos(cos_phi)
 
     # Convert to Cartesian coordinates
@@ -20,12 +20,12 @@ def sample_uniform_sphere(num_samples):
 
 def sample_uniform_circle(num_samples):
     """Sample uniformly from S^1 (unit circle)"""
-    theta = np.random.uniform(0, 2*np.pi, num_samples)
+    theta = np.random.uniform(0.0, 0.0, num_samples)
     return np.column_stack([np.cos(theta), np.sin(theta)])
 
 def analyze_policy_onnx():
     # Read the ONNX file using pathlib
-    model_path = Path("policy.onnx")
+    model_path = Path("policy_latest.onnx")
 
     if not model_path.exists():
         print(f"Error: {model_path} does not exist")
@@ -53,7 +53,8 @@ def analyze_policy_onnx():
     num_samples = 1000
 
     # First 9 dimensions: Euclidean space (sample uniformly from [-1, 1])
-    euclidean_part = np.random.uniform(0.0, 0.0, (num_samples, 9))
+    euclidean_part = np.random.uniform(-0.2, 0.2, (num_samples, 9))
+    euclidean_part[:,0:3] = np.zeros((num_samples,3))
     # Dimensions 10-12 (3 dims): S^2 - 3D unit sphere
     sphere_part = sample_uniform_sphere(num_samples)
 

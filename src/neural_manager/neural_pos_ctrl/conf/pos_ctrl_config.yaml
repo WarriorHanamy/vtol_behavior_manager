@@ -9,7 +9,7 @@ node:
 
 # Model configuration
 model:
-  path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/policy.onnx"
+  path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/policy_latest.onnx"
 
   # ONNX runtime settings
   inference:
@@ -29,8 +29,8 @@ control:
 
   # Action mapping
   thrust_acc: 9.8 # m/s^2
-  max_roll_pitch_rate: 3.0 # rad/s
-  max_yaw_rate: 3.0 # rad/s
+  max_roll_pitch_rate: 1.0 # rad/s
+  max_yaw_rate: 1.0 # rad/s
 
   # Input limits
   input_saturation:
