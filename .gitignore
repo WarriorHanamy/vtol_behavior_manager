@@ -13,3 +13,4 @@ install/*
 **__pycache__**
 
 outputs/
+*.onnx

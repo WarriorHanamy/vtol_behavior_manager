@@ -18,6 +18,7 @@ services:
     volumes:
       - ${HOME}/.Xauthority:/home/qgc/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${HOME}/sim2sim:/home/qgc/ulgs/
     command: qgc
     deploy:
       resources:

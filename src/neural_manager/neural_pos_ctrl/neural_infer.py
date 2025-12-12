@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 from tkinter.constants import CURRENT
 from typing import Optional
+from gru_executor import GRUPolicyExecutor
 
 import hydra
 import numpy as np
@@ -107,14 +108,16 @@ class NeuralControlNode(rclpy.node.Node):
             return False
         self.get_logger().info(f"加载ONNX模型: {self._model_path}")
 
-        providers = self.cfg.model.inference.providers
-        self._inference_session = ort.InferenceSession(
-            str(self._model_path), providers=providers
+        # providers = self.cfg.model.inference.providers
+        self._policy_executor = GRUPolicyExecutor(
+            self._model_path, hidden_dim=self.cfg.model.hidden_dim, 
+            num_layers=self.cfg.model.num_layers
         )
 
-        input_info = self._inference_session.get_inputs()[0]
-        output_info = self._inference_session.get_outputs()[0]
+        input_info = self._policy_executor.session.get_inputs()[0]
+        output_info = self._policy_executor.session.get_outputs()[0]
 
+        
         self._input_name = input_info.name
         self._output_name = output_info.name
         self._input_shape = input_info.shape
@@ -454,9 +457,8 @@ class NeuralControlNode(rclpy.node.Node):
             input_data = observation.reshape(1, -1).astype(np.float32)
 
             ort_inputs = {self._input_name: input_data}
-            ort_outputs = self._inference_session.run([self._output_name], ort_inputs)
-
-            action = ort_outputs[0][0]
+            
+            action = self._policy_executor(input_data)
             action = np.clip(action, -1.0, 1.0)
 
             return action

@@ -11,6 +11,8 @@ node:
 model:
   path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/policy_latest.onnx"
 
+  hidden_dim: 64
+  num_layers: 1
   # ONNX runtime settings
   inference:
     providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -36,12 +38,12 @@ control:
   input_saturation:
     enabled: true
     linear_velocity: [-5.0, 5.0] # m/s
-    angular_velocity: [-3.0, 3.0] # rad/s
+    angular_velocity: [-1.5, 1.5] # rad/s
     target_position: [-5.0, 5.0] # m
     actions: [-1.0, 1.0] # normalized
 
 target:
-  position: [0.0, 0.0, -4.0] # NED coordinates [North, East, Down] meters
+  position: [0.0, 0.0, -8.0] # NED coordinates [North, East, Down] meters
   yaw: 0.0 # radians
 
 # Safety limits
