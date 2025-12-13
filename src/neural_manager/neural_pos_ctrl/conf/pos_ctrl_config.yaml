@@ -11,8 +11,22 @@ node:
 model:
   path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/policy_latest.onnx"
 
+  # Executor type: "gru" or "mlp"
+  executor_type: "mlp"
+
+  # GRU specific parameters (only used when executor_type="gru")
   hidden_dim: 64
   num_layers: 1
+
+  # Expected input/output shapes for validation
+  expected_shapes:
+    gru:
+      input: [1, 20]
+      output: [1, 4]
+    mlp:
+      input: [1, 20]
+      output: [1, 4]
+
   # ONNX runtime settings
   inference:
     providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -43,7 +57,7 @@ control:
     actions: [-1.0, 1.0] # normalized
 
 target:
-  position: [0.0, 0.0, -8.0] # NED coordinates [North, East, Down] meters
+  position: [0.0, 0.0, -5.0] # NED coordinates [North, East, Down] meters
   yaw: 0.0 # radians
 
 # Safety limits
@@ -58,3 +72,4 @@ debug:
   measure_inference_time: true
   print_observation: true
   print_control: true
+  acc_fixed: false

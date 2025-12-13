@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 from tkinter.constants import CURRENT
 from typing import Optional
-from gru_executor import GRUPolicyExecutor
 
 import hydra
 import numpy as np
@@ -29,6 +28,12 @@ import onnxruntime as ort
 import rclpy
 import rclpy.node
 import rclpy.qos
+from omegaconf.omegaconf import DictConfig, OmegaConf
+from px4_msgs.msg import VehicleOdometry, VehicleThrustAccSetpoint
+from rclpy.qos import qos_profile_sensor_data
+from std_msgs.msg import Bool
+
+from gru_executor import GRUPolicyExecutor
 from math_utils import (
     frd_flu_rotate,
     quat_act_rot,
@@ -37,13 +42,9 @@ from math_utils import (
     quaternion_to_euler,
     rotation_matrix_body_to_ned,
     rotation_matrix_ned_to_body,
-    frd_flu_rotate
 )
-from omegaconf.omegaconf import DictConfig, OmegaConf
-from std_msgs.msg import Bool
+from mlp_executor import MLPPolicyExecutor
 
-from px4_msgs.msg import VehicleOdometry, VehicleThrustAccSetpoint
-from rclpy.qos import qos_profile_sensor_data
 
 class NeuralControlNode(rclpy.node.Node):
     """Neural位置控制神经网络推理节点"""
@@ -80,17 +81,7 @@ class NeuralControlNode(rclpy.node.Node):
         self._max_roll_pitch_rate = cfg.control.max_roll_pitch_rate
         self._max_yaw_rate = cfg.control.max_yaw_rate
 
-        # Log loaded configuration
-        self.get_logger().info("Hydra配置加载完成:")
-        self.get_logger().info(f"  模型路径: {self._model_path}")
-        self.get_logger().info(f"  控制频率: {self._control_rate:.1f} Hz")
-        self.get_logger().info(f"  目标位置(NED): {self._target_position}")
-        self.get_logger().info(f"  目标偏航: {math.degrees(self._target_yaw):.1f}°")
-        self.get_logger().info(
-            f"  最大横滚/俯仰角速度: {self._max_roll_pitch_rate:.1f} rad/s"
-        )
-        self.get_logger().info(f"  最大偏航角速度: {self._max_yaw_rate:.1f} rad/s")
-
+        self._last_action = np.zeros(4, dtype=np.float32)
         # 初始化ONNX模型
         if self.init_model():
             # 创建发布者和订阅者
@@ -108,52 +99,76 @@ class NeuralControlNode(rclpy.node.Node):
             return False
         self.get_logger().info(f"加载ONNX模型: {self._model_path}")
 
-        # providers = self.cfg.model.inference.providers
-        self._policy_executor = GRUPolicyExecutor(
-            self._model_path, hidden_dim=self.cfg.model.hidden_dim, 
-            num_layers=self.cfg.model.num_layers
-        )
+        # Create executor based on configuration
+        executor_type = self.cfg.model.executor_type
+        providers = self.cfg.model.inference.providers
 
+        if executor_type == "gru":
+            self.get_logger().info("使用 GRU 执行器")
+            self._policy_executor = GRUPolicyExecutor(
+                self._model_path,
+                hidden_dim=self.cfg.model.hidden_dim,
+                num_layers=self.cfg.model.num_layers,
+                providers=providers,
+            )
+        elif executor_type == "mlp":
+            self.get_logger().info("使用 MLP 执行器")
+            self._policy_executor = MLPPolicyExecutor(
+                self._model_path, providers=providers
+            )
+        else:
+            self.get_logger().error(f"不支持的执行器类型: {executor_type}")
+            return False
+
+        # Get model input/output information
         input_info = self._policy_executor.session.get_inputs()[0]
         output_info = self._policy_executor.session.get_outputs()[0]
 
-        
         self._input_name = input_info.name
         self._output_name = output_info.name
         self._input_shape = input_info.shape
         self._output_shape = output_info.shape
 
         self.get_logger().info("模型信息:")
+        self.get_logger().info(f"  执行器类型: {executor_type}")
         self.get_logger().info(f"  输入: {self._input_name}, 形状: {self._input_shape}")
         self.get_logger().info(
             f"  输出: {self._output_name}, 形状: {self._output_shape}"
         )
 
-        expected_input_shape = [1, 16]
-        expected_output_shape = [1, 4]
+        # Validate shapes based on executor type
+        expected_shapes = self.cfg.model.expected_shapes[executor_type]
+        expected_input_shape = expected_shapes.input
+        expected_output_shape = expected_shapes.output
 
-        if self._input_shape != expected_input_shape:
-            self.get_logger().error(
-                f"输入形状不匹配，期望 {expected_input_shape}，实际 {self._input_shape}"
-            )
-            return False
+        if self.cfg.model.inference.validate_shapes:
+            if self._input_shape != expected_input_shape:
+                self.get_logger().error(
+                    f"输入形状不匹配，期望 {expected_input_shape}，实际 {self._input_shape}"
+                )
+                return False
 
-        if self._output_shape != expected_output_shape:
-            self.get_logger().error(
-                f"输出形状不匹配，期望 {expected_output_shape}，实际 {self._output_shape}"
-            )
-            return False
+            if self._output_shape != expected_output_shape:
+                self.get_logger().error(
+                    f"输出形状不匹配，期望 {expected_output_shape}，实际 {self._output_shape}"
+                )
+                return False
 
         self._model_loaded = True
         self.get_logger().info("✅ ONNX模型加载成功!")
+
+        # Reset executor state (important for GRU)
+        self._policy_executor.reset()
+
         return True
 
     def init_publishers(self):
         """初始化发布者"""
         # 控制指令发布者
         self._acc_rates_publisher = self.create_publisher(
-            VehicleThrustAccSetpoint, self.cfg.node.setpoint_topic, 
-            qos_profile=qos_profile_sensor_data
+            VehicleThrustAccSetpoint,
+            self.cfg.node.setpoint_topic,
+            qos_profile=qos_profile_sensor_data,
         )
         self.get_logger().info("发布者已初始化")
 
@@ -271,11 +286,11 @@ class NeuralControlNode(rclpy.node.Node):
             # 打印控制指令
             self.print_control_command(action)
             # 立即发布控制指令
+
             self.publish_control_command(action)
             # 输出推理耗时（如果启用性能监控）
             if self.cfg.debug.measure_inference_time:
                 self.get_logger().info(f"🧠 神经网络推理耗时: {inference_time:.2f} ms")
-
 
     def control_timer_callback(self):
         if not self._model_loaded or not self._active:
@@ -315,52 +330,49 @@ class NeuralControlNode(rclpy.node.Node):
         Returns:
             16维观测向量或None(数据无效时)
         """
-        try:
-            pos = np.array(msg.position, dtype=np.float32)  # NED坐标系 [x, y, z]
-            vel = np.array(msg.velocity, dtype=np.float32)  # 参考frame [vx, vy, vz]
-            ang_vel_b_frd = np.array(
-                msg.angular_velocity, dtype=np.float32
-            )  # 机体frame [wx, wy, wz]
-            quat_frd = np.array(msg.q, dtype=np.float32)  # [w, x, y, z] Hamilton约定
-            quat_flu = quat_right_multiply_flu_frd(quat_frd)
+        pos = np.array(msg.position, dtype=np.float32)  # NED坐标系 [x, y, z]
+        vel = np.array(msg.velocity, dtype=np.float32)  # 参考frame [vx, vy, vz]
+        ang_vel_b_frd = np.array(
+            msg.angular_velocity, dtype=np.float32
+        )  # 机体frame [wx, wy, wz]
+        quat_frd = np.array(msg.q, dtype=np.float32)  # [w, x, y, z] Hamilton约定
+        quat_flu = quat_right_multiply_flu_frd(quat_frd)
 
-            gra_dir_w = np.array([0.0, 0.0, 1.0])  # NED坐标系的向上重力
-            lin_vel_b_flu = quat_pas_rot(quat_flu, vel)
-            ang_vel_b_flu = frd_flu_rotate(ang_vel_b_frd)
-            gra_dir_b_flu = quat_pas_rot(quat_flu, gra_dir_w)
+        gra_dir_w = np.array([0.0, 0.0, 1.0])  # NED坐标系的向上重力
+        lin_vel_b_flu = quat_pas_rot(quat_flu, vel)
+        ang_vel_b_flu = frd_flu_rotate(ang_vel_b_frd)
+        gra_dir_b_flu = quat_pas_rot(quat_flu, gra_dir_w)
 
-            # lin_vel_b_flu = np.zeros_like(lin_vel_b_flu)
-            target_pos_w = self._target_position
-            to_target = target_pos_w - pos
+        # lin_vel_b_flu = np.zeros_like(lin_vel_b_flu)
+        target_pos_w = self._target_position
+        to_target = target_pos_w - pos
 
-            to_target_pos_b_flu = quat_pas_rot(quat_flu, to_target)
+        to_target_pos_b_flu = quat_pas_rot(quat_flu, to_target)
+        to_target_pos_b_flu[2] = 0.0  # 忽略垂直方向误差
 
-            target_yaw_dir = np.array(
-                [math.cos(self._target_yaw), math.sin(self._target_yaw)]
-            )
-            current_yaw_dir = np.array([math.cos(0.0), math.sin(0.0)])
-            target_yaw_dir= current_yaw_dir
+        target_yaw_dir = np.array(
+            [math.cos(self._target_yaw), math.sin(self._target_yaw)]
+        )
+        current_yaw_dir = np.array([math.cos(0.0), math.sin(0.0)])
+        target_yaw_dir = current_yaw_dir
 
-            observation = np.concatenate(
-                [
-                    lin_vel_b_flu,  # 3维: 机体线速度 [vx, vy, vz]
-                    ang_vel_b_flu,  # 3维: 机体角速度 [wx, wy, wz]
-                    to_target_pos_b_flu,  # 3维: 目标位置(机体) [dx, dy, dz]
-                    gra_dir_b_flu,  # 3维: 机体重力投影 [gx, gy, gz]
-                    current_yaw_dir,  # 2维: 当前偏航方向 [cos(yaw), sin(yaw)]
-                    target_yaw_dir,  # 2维: 目标偏航方向 [cos(target_yaw), sin(target_yaw)]
-                ],
-                dtype=np.float32,
-            )
+        observation = np.concatenate(
+            [
+                lin_vel_b_flu,  # 3维: 机体线速度 [vx, vy, vz]
+                ang_vel_b_flu,  # 3维: 机体角速度 [wx, wy, wz]
+                to_target_pos_b_flu,  # 3维: 目标位置(机体) [dx, dy, dz]
+                gra_dir_b_flu,  # 3维: 机体重力投影 [gx, gy, gz]
+                current_yaw_dir,  # 2维: 当前偏航方向 [cos(yaw), sin(yaw)]
+                target_yaw_dir,  # 2维: 目标偏航方向 [cos(target_yaw), sin(target_yaw)]
+                self._last_action,  # 4维: 上一帧动作
+            ],
+            dtype=np.float32,
+        )
 
-            # # 应用输入饱和限制
-            observation = self.apply_obs_saturation(observation)
+        # # 应用输入饱和限制
+        observation = self.apply_obs_saturation(observation)
 
-            return observation
-
-        except Exception as e:
-            self.get_logger().error(f"观测处理错误: {e}")
-            return None
+        return observation
 
     def print_observation(self, observation: np.ndarray):
         """
@@ -381,7 +393,6 @@ class NeuralControlNode(rclpy.node.Node):
         current_yaw_dir = observation[12:14]  # 当前偏航方向
         target_yaw_dir = observation[14:16]  # 目标偏航方向
 
-        print("📊 观测向量 (16维):")
         print(
             f"  🎯 目标位置(机体): [{to_target_pos_b[0]:.3f}, {to_target_pos_b[1]:.3f}, {to_target_pos_b[2]:.3f}]"
         )
@@ -426,18 +437,12 @@ class NeuralControlNode(rclpy.node.Node):
         yaw_rate = yaw_rate_raw * self._max_yaw_rate  # 转换为偏航角速度
 
         print("🎮 控制指令 (4维):")
-        print(
-            f"  ⬆️  推力加速度:     {thrust_acc:.3f} m/s² (原始: {thrust_raw:.3f})"
-        )
-        print(
-            f"  🔄 横滚角速度:     {roll_rate:.3f} rad/s (原始: {roll_rate_raw:.3f})"
-        )
+        print(f"  ⬆️  推力加速度:     {thrust_acc:.3f} m/s² (原始: {thrust_raw:.3f})")
+        print(f"  🔄 横滚角速度:     {roll_rate:.3f} rad/s (原始: {roll_rate_raw:.3f})")
         print(
             f"  🔄 俯仰角速度:     {pitch_rate:.3f} rad/s (原始: {pitch_rate_raw:.3f})"
         )
-        print(
-            f"  🔄 偏航角速度:     {yaw_rate:.3f} rad/s (原始: {yaw_rate_raw:.3f})"
-        )
+        print(f"  🔄 偏航角速度:     {yaw_rate:.3f} rad/s (原始: {yaw_rate_raw:.3f})")
 
     def apply_obs_saturation(self, observation: np.ndarray) -> np.ndarray:
         if not self.cfg.control.input_saturation.enabled:
@@ -454,13 +459,8 @@ class NeuralControlNode(rclpy.node.Node):
     def run_inference(self, observation: np.ndarray) -> Optional[np.ndarray]:
         """运行神经网络推理"""
         try:
-            input_data = observation.reshape(1, -1).astype(np.float32)
-
-            ort_inputs = {self._input_name: input_data}
-            
-            action = self._policy_executor(input_data)
+            action = self._policy_executor(observation)
             action = np.clip(action, -1.0, 1.0)
-
             return action
 
         except Exception as e:
@@ -471,6 +471,7 @@ class NeuralControlNode(rclpy.node.Node):
         """发布控制指令"""
         msg = VehicleThrustAccSetpoint()
         msg.timestamp = int(time.time() * 1e6)  # 微秒
+        self._last_action = action.copy()
         action = action.clip(-1.0, 1.0)
         roll_rate = action[1] * self._max_roll_pitch_rate
         pitch_rate = action[2] * self._max_roll_pitch_rate
@@ -484,9 +485,8 @@ class NeuralControlNode(rclpy.node.Node):
         msg.rates_sp[0] = rate_frd[0]
         msg.rates_sp[1] = rate_frd[1]
         msg.rates_sp[2] = rate_frd[2]
-        # msg.rates_sp[0] = rate_flu[0]
-        # msg.rates_sp[1] = rate_flu[1]
-        # msg.rates_sp[2] = rate_flu[2]
+        if self.cfg.debug.acc_fixed:
+            thrust_acc = 9.81
         msg.thrust_acc_sp = thrust_acc
         self._acc_rates_publisher.publish(msg)
 
