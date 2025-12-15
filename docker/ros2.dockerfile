@@ -38,8 +38,11 @@ WORKDIR /home/ros/ros2_ws
 ENV ROS_DISTRO=humble
 
 # Execute just b command (full build)
+ARG LATETST=true
 RUN just b
 
 RUN echo "source /home/ros/ros2_ws/install/setup.bash" >> \
     /home/ros/.bashrc
+
+RUN echo "alias j='just'" >> /home/ros/.bashrc
 ENV INFER_WORKSPACE=/home/ros/ros2_ws

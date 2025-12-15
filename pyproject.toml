@@ -1,0 +1,26 @@
+[project]
+authors = [
+  {name = "Hanamy", email = "rongerch@outlook.com"},
+]
+dependencies = [
+  "numpy",
+  "matplotlib",
+  "pandas",
+  "seaborn",
+  "onnxruntime",
+  "hydra-core",
+  "infer_utils"
+]
+
+description = "Inference python"
+license = {text = "BSD"}
+name = "neural-inference"
+readme = "README.md"
+requires-python = "~=3.10.0"
+version = "0.1.0"
+
+[tool.uv.workspace]
+members = ["src/neural_manager/neural_pos_ctrl/infer_utils"]  # infer_utils package
+
+[tool.uv.sources]
+infer_utils = { workspace = true } # 告诉 uv 这个包来自 workspace

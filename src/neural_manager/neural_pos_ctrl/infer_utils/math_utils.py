@@ -192,7 +192,7 @@ def quat_right_multiply_flu_frd(q: np.ndarray) -> np.ndarray:
 def frd_flu_rotate(v: np.ndarray) -> np.ndarray:
     """对齐FRD与FLU坐标系的向量"""
     q_flu_frd = np.array([0.0, 1.0, 0.0, 0.0])
-    return quat_pas_rot(q_flu_frd, v)
+    return quat_act_rot(q_flu_frd, v)
 
 
 def normalize_quaternion(q: np.ndarray) -> np.ndarray:
