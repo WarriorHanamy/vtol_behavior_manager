@@ -14,11 +14,11 @@ Handles message routing, topic management, and callback coordination.
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import numpy as np
 import rclpy.node
-from px4_msgs.msg import VehicleOdometry, VehicleThrustAccSetpoint
+from px4_msgs.msg import VehicleOdometry, VehicleRatesSetpoint, VehicleThrustAccSetpoint
 from rclpy.qos import qos_profile_sensor_data
 
 
@@ -33,6 +33,7 @@ class Communicator:
         node: rclpy.node.Node,
         odometry_topic: str = "/fmu/out/vehicle_odometry",
         setpoint_topic: str = "/neural/control",
+        control_mode: str = "rates_throttle",
     ):
         """
         Initialize the communicator component.
@@ -40,11 +41,13 @@ class Communicator:
         Args:
             node: ROS2 node instance
             odometry_topic: Topic name for VehicleOdometry subscription
-            setpoint_topic: Topic name for VehicleThrustAccSetpoint publication
+            setpoint_topic: Topic name for setpoint publication
+            control_mode: 'rates_throttle' (VehicleRatesSetpoint) or 'rates_acc' (VehicleThrustAccSetpoint)
         """
         self._node = node
         self._odometry_topic = odometry_topic
         self._setpoint_topic = setpoint_topic
+        self._control_mode = control_mode
 
         # Callback storage
         self._odometry_callback: Optional[Callable] = None
@@ -61,15 +64,23 @@ class Communicator:
         self._start_time = time.time()
 
     def initialize_publishers(self):
-        """Initialize ROS2 publishers."""
+        """Initialize ROS2 publishers based on control mode."""
         try:
+            # Choose message type based on control mode
+            if self._control_mode == "rates_throttle":
+                msg_type = VehicleRatesSetpoint
+                msg_name = "VehicleRatesSetpoint"
+            else:  # rates_acc
+                msg_type = VehicleThrustAccSetpoint
+                msg_name = "VehicleThrustAccSetpoint"
+            
             self._setpoint_publisher = self._node.create_publisher(
-                VehicleThrustAccSetpoint,
+                msg_type,
                 self._setpoint_topic,
                 qos_profile=qos_profile_sensor_data,
             )
             if self._node.get_logger():
-                self._node.get_logger().info(f"✅ 发布者已初始化: {self._setpoint_topic}")
+                self._node.get_logger().info(f"✅ 发布者已初始化: {self._setpoint_topic} ({msg_name})")
             return True
         except Exception as e:
             if self._node.get_logger():
@@ -106,12 +117,15 @@ class Communicator:
                 self._node.get_logger().error(f"❌ 订阅者初始化失败: {e}")
             return False
 
-    def publish_control_setpoint(self, setpoint_msg: VehicleThrustAccSetpoint) -> bool:
+    def publish_control_setpoint(
+        self, 
+        setpoint_msg: Union[VehicleRatesSetpoint, VehicleThrustAccSetpoint]
+    ) -> bool:
         """
         Publish control setpoint message.
 
         Args:
-            setpoint_msg: VehicleThrustAccSetpoint message to publish
+            setpoint_msg: VehicleRatesSetpoint or VehicleThrustAccSetpoint message to publish
 
         Returns:
             True if publish successful, False otherwise
@@ -133,7 +147,7 @@ class Communicator:
 
     def publish_control_setpoint_with_validation(
         self,
-        setpoint_msg: VehicleThrustAccSetpoint,
+        setpoint_msg: Union[VehicleRatesSetpoint, VehicleThrustAccSetpoint],
         validate_timestamp: bool = True,
         max_message_age: float = 0.1
     ) -> bool:
@@ -141,7 +155,7 @@ class Communicator:
         Publish control setpoint with validation.
 
         Args:
-            setpoint_msg: VehicleThrustAccSetpoint message to publish
+            setpoint_msg: VehicleRatesSetpoint or VehicleThrustAccSetpoint message to publish
             validate_timestamp: Whether to validate message timestamp
             max_message_age: Maximum age of message in seconds
 
@@ -166,17 +180,31 @@ class Communicator:
                     )
                 return False
 
-        # Validate thrust and rates
-        if not np.isfinite(setpoint_msg.thrust_acc_sp):
-            if self._node.get_logger():
-                self._node.get_logger().warning("推力加速度值无效 (NaN/Inf)")
-            return False
-
-        for i, rate in enumerate(setpoint_msg.rates_sp):
-            if not np.isfinite(rate):
+        # Validate thrust and rates based on message type
+        if isinstance(setpoint_msg, VehicleRatesSetpoint):
+            # Validate VehicleRatesSetpoint
+            if not all(np.isfinite([setpoint_msg.roll, setpoint_msg.pitch, setpoint_msg.yaw])):
                 if self._node.get_logger():
-                    self._node.get_logger().warning(f"角速度值[{i}]无效 (NaN/Inf)")
+                    self._node.get_logger().warning("角速度值无效 (NaN/Inf)")
                 return False
+            
+            if not all(np.isfinite(setpoint_msg.thrust_body)):
+                if self._node.get_logger():
+                    self._node.get_logger().warning("推力值无效 (NaN/Inf)")
+                return False
+                
+        elif isinstance(setpoint_msg, VehicleThrustAccSetpoint):
+            # Validate VehicleThrustAccSetpoint
+            if not np.isfinite(setpoint_msg.thrust_acc_sp):
+                if self._node.get_logger():
+                    self._node.get_logger().warning("推力加速度值无效 (NaN/Inf)")
+                return False
+
+            for i, rate in enumerate(setpoint_msg.rates_sp):
+                if not np.isfinite(rate):
+                    if self._node.get_logger():
+                        self._node.get_logger().warning(f"角速度值[{i}]无效 (NaN/Inf)")
+                    return False
 
         # Publish the validated message
         return self.publish_control_setpoint(setpoint_msg)

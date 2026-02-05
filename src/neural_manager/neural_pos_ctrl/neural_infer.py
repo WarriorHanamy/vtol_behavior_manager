@@ -73,29 +73,34 @@ class NeuralControlNode(rclpy.node.Node):
                 saturation_limits={
                     "target_position": self.cfg.control.input_saturation.target_position
                 },
-                print_observations=self.cfg.debug.print_observation
+                print_observations=self.cfg.debug.print_observation,
+                ros_node=self  # Pass ROS2 node for publishing observation details
             )
 
-            # Create action post processor
+            # Create action post processor (matching training environment action processing)
             action_post_processor = ActionPostProcessor(
-                thrust_acc_base=self.cfg.control.thrust_acc,
+                control_mode=self.cfg.control.control_mode,
+                max_acc=self.cfg.control.max_acc,
                 max_roll_pitch_rate=self.cfg.control.max_roll_pitch_rate,
                 max_yaw_rate=self.cfg.control.max_yaw_rate,
                 node_logger=self.get_logger(),
                 acc_fixed=self.cfg.debug.acc_fixed,
-                enable_action_clipping=self.cfg.model.inference.output_clipping.enabled,
+                use_tanh_activation=self.cfg.control.action_processing.use_tanh_activation,
+                enable_action_clipping=self.cfg.control.action_processing.enable_action_clipping,
                 action_limits={
-                    "min": self.cfg.model.inference.output_clipping.min,
-                    "max": self.cfg.model.inference.output_clipping.max
+                    "min": self.cfg.control.input_saturation.actions[0],
+                    "max": self.cfg.control.input_saturation.actions[1]
                 },
-                print_control_commands=self.cfg.debug.print_control
+                print_control_commands=self.cfg.debug.print_control,
+                ros_node=self  # Pass ROS2 node for publishing angular rate commands
             )
 
             # Create communicator
             communicator = Communicator(
                 node=self,
                 odometry_topic=self.cfg.node.odometry_topic,
-                setpoint_topic=self.cfg.node.setpoint_topic
+                setpoint_topic=self.cfg.node.setpoint_topic,
+                control_mode=self.cfg.control.control_mode
             )
 
             # Create history buffer if needed (for MLP actors)

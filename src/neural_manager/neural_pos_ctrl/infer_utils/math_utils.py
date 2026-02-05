@@ -47,6 +47,28 @@ def quaternion_to_euler(q: np.ndarray) -> Tuple[float, float, float]:
     return roll, pitch, yaw
 
 
+def quaternion_to_yaw(q: np.ndarray) -> float:
+    """
+    从四元数中提取yaw角 (偏航角)
+    
+    使用Hamilton四元数约定 [w, x, y, z]
+    这个函数比完整的欧拉角转换更高效，仅计算yaw角度
+    
+    Args:
+        q: 四元数 [w, x, y, z]
+    
+    Returns:
+        yaw角度 (弧度)
+    """
+    # Hamilton约定四元数 [w, x, y, z]
+    w, x, y, z = q[0], q[1], q[2], q[3]
+    
+    # 直接计算yaw角
+    yaw = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+    
+    return yaw
+
+
 def euler_to_quaternion(yaw: float, pitch: float, roll: float) -> np.ndarray:
     """
     欧拉角转换为四元数，内旋顺序ZYX (yaw-pitch-roll)

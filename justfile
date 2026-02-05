@@ -41,7 +41,7 @@ build-qgc:
 build-ros2:
     docker build -f docker/ros2.dockerfile \
     --network=host \
-    -t ros2:latest .
+    -t ros2-vtol:latest .
 
 run-qgc:
     echo " " | sudo -S chmod 777 /dev/input/event* && \
@@ -67,8 +67,8 @@ run-ros2:
         -v {{justfile_directory()}}/src:/home/ros/ros2_ws/src \
         -v {{justfile_directory()}}/scripts:/home/ros/ros2_ws/scripts \
         -v {{justfile_directory()}}/justfile:/home/ros/ros2_ws/justfile \
-        --name ros2 \
-        ros2
+        --name ros2-vtol \
+        ros2-vtol
 
 build-px4:
     docker build -f docker/px4-gazebo.dockerfile \
@@ -99,7 +99,7 @@ df-docker:
 # attach
 alias a := enter-ros2
 enter-ros2:
-    docker exec -it ros2 bash
+    docker exec -it ros2-vtol bash
 
 # Docker Compose commands
 up:

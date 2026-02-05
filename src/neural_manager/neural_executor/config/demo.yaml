@@ -32,6 +32,11 @@ failsafe_config:
 
 # Neural control parameters
 neural_control:
+  # Control mode selection
+  # - "rates_throttle": Use VehicleRatesSetpoint (throttle + body rates) - recommended for multicopters
+  # - "rates_acc": Use VehicleThrustAccSetpoint (thrust acceleration + body rates) - alternative mode
+  control_mode: "rates_throttle"
+
   # Publish rate for fake network node (Hz)
   publish_rate: 10.0
 

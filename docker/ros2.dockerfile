@@ -9,12 +9,12 @@ RUN --mount=type=cache,target=/var/cache/apt \
     python3-pip \
     ros-humble-plotjuggler-ros
 
-# Install just command runner
-RUN wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor | tee /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg 1> /dev/null && \
-    echo "deb [arch=all,$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | tee /etc/apt/sources.list.d/prebuilt-mpr.list && \
-    apt update && \
-    apt install -y just
-    
+# Install just command runner from GitHub releases
+RUN wget https://github.com/casey/just/releases/download/1.36.0/just-1.36.0-x86_64-unknown-linux-musl.tar.gz && \
+    tar -xzf just-1.36.0-x86_64-unknown-linux-musl.tar.gz && \
+    mv just /usr/local/bin/ && \
+    rm just-1.36.0-x86_64-unknown-linux-musl.tar.gz && \
+    chmod +x /usr/local/bin/just
 
 # Install Python packages (ONNX Runtime)
 RUN pip3 install --no-cache-dir onnxruntime numpy hydra-core
