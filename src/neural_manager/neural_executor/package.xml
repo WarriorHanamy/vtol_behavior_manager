@@ -4,7 +4,8 @@
   <name>neural_executor</name>
   <version>0.0.1</version>
   <description>Neural Control Demo with integrated RC triggering and comprehensive failsafe mechanisms</description>
-  <maintainer email="zhenghw23@foxmail.com">Arclunar</maintainer>
+  <!-- Original author: Arclunar <zhenghw23@foxmail.com> -->
+  <maintainer email="rongerch@outlook.com">WarriorHanamy</maintainer>
   <license>BSD-3-Clause</license>
 
   <depend>Eigen3</depend>

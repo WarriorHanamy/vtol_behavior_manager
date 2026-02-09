@@ -3,8 +3,25 @@
 # PX4 Gazebo 8 (Harmonic) development environment in Ubuntu 22.04 Jammy
 #
 
+# 同时声明大小写 ARG
+ARG http_proxy=http://172.17.0.1:7890
+ARG HTTP_PROXY=${http_proxy}
+ARG https_proxy=${http_proxy}
+ARG HTTPS_PROXY=${http_proxy}
+ARG no_proxy=localhost,127.0.0.1
+ARG NO_PROXY=${no_proxy}
+
 FROM px4io/px4-dev-base-jammy:2024-05-18
-LABEL maintainer="Steven Cheng <zhenghw23@foxmail.com>"
+
+# 声明 ARG 以便在后续使用
+ARG http_proxy
+ARG HTTP_PROXY
+ARG https_proxy
+ARG HTTPS_PROXY
+ARG no_proxy
+ARG NO_PROXY
+# Original author: Steven Cheng <zhenghw23@foxmail.com> (Arclunar)
+LABEL maintainer="WarriorHanamy <rongerch@outlook.com>"
 
 # Some QT-Apps/Gazebo don't not show controls without this
 ENV QT_X11_NO_MITSHM=1
@@ -61,13 +78,19 @@ RUN apt install -y ros-humble-ros-base ros-humble-ros-gzharmonic &&\
     echo "source /opt/ros/humble/setup.bash" >> ${HOME}/.bashrc
 
 WORKDIR /root
-RUN git clone https://github.com/Arclunar/PX4-Neupilot.git --recursive --depth 1
+RUN git clone https://github.com/WarriorHanamy/PX4-Neupilot.git --recursive --depth 1
 
 WORKDIR /root/PX4-Neupilot
 RUN bash install-dds-agent.bash
 
 RUN make px4_sitl_default
 ENV PATH="/root/PX4-Neupilot/Tools:$PATH"
+
+RUN apt install -y software-properties-common && \
+    add-apt-repository ppa:maveonair/helix-editor && \
+    apt update && \
+    apt install -y helix && \
+    echo "alias vim='hx'" >> /root/.bashrc
 
 # FROM osrf/ros:humble-desktop AS ros-deps
 

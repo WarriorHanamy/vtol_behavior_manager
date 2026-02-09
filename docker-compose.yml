@@ -1,5 +1,6 @@
 
 services:
+  # QGroundControl - Ground Control Station
   qgc:
     build:
       context: .
@@ -19,6 +20,7 @@ services:
       - ${HOME}/.Xauthority:/home/qgc/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ${HOME}/sim2sim:/home/qgc/ulgs/
+      - /dev/input:/dev/input
     command: qgc
     deploy:
       resources:
@@ -27,13 +29,16 @@ services:
         reservations:
           memory: 1G
 
+  # ROS2 Workspace - Neural control and inference
   ros2:
     build:
       context: .
       dockerfile: docker/ros2.dockerfile
       network: host
-    image: ros2:latest
-    container_name: ros2
+      args:
+        LATETST: "true"
+    image: ros2-vtol:latest
+    container_name: ros2-vtol
     restart: unless-stopped
     privileged: true
     network_mode: host
@@ -44,6 +49,7 @@ services:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
       - ROS_DISTRO=humble
+      - INFER_WORKSPACE=/home/ros/ros2_ws
     volumes:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
@@ -51,9 +57,44 @@ services:
       - ./scripts:/home/ros/ros2_ws/scripts
       - ./justfile:/home/ros/ros2_ws/justfile
     command: tail -f /dev/null
+    stdin_open: true
+    tty: true
     deploy:
       resources:
         limits:
           memory: 8G
         reservations:
           memory: 4G
+
+  # PX4 Gazebo Simulator
+  px4:
+    build:
+      context: .
+      dockerfile: docker/px4-gazebo.dockerfile
+      network: host
+    image: px4-gazebo-harmonic:v1
+    container_name: px4-gazebo-harmonic-tmp
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+    volumes:
+      - ${HOME}/.Xauthority:/root/.Xauthority
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    command: tail -f /dev/null
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

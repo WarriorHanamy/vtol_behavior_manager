@@ -26,9 +26,17 @@ just config-px4msg
 
 #### 1. 构建 Docker 镜像
 
+**方式 1: 使用 just 命令**
 ```bash
 just build-px4
 ```
+
+**方式 2: 使用 Docker Compose**
+```bash
+docker compose build px4
+```
+
+> 📚 详细构建指南: [Docker Compose 构建文档](docs/docker-compose-build.md)
 
 #### 2. 测试运行容器启动 PX4-Gazebo-harmonic
 
@@ -36,15 +44,19 @@ just build-px4
 just run-px4
 ```
 
-
 ### Docker 部署 QGroundControl
 
 #### 1. 构建 Docker 镜像
 
+**方式 1: 使用 just 命令**
 ```bash
 just build-qgc
 ```
 
+**方式 2: 使用 Docker Compose**
+```bash
+docker compose build qgc
+```
 
 #### 2. 测试运行容器启动 QGroundControl
 
@@ -52,15 +64,19 @@ just build-qgc
 just run-qgc
 ```
 
-
 ### Docker 部署 PX4-ROS2-BRIDGE
 
 #### 1. 构建 Docker 镜像
 
+**方式 1: 使用 just 命令**
 ```bash
 just build-ros2
 ```
 
+**方式 2: 使用 Docker Compose**
+```bash
+docker compose build ros2
+```
 
 #### 2. 测试运行容器
 
@@ -72,6 +88,29 @@ just run-ros2
 ```bash
 just build
 ```
+
+### Docker Compose 快速启动
+
+使用 Docker Compose 可以一次性构建和启动所有服务：
+
+```bash
+# 构建所有镜像
+docker compose build
+
+# 启动所有服务
+docker compose up -d
+
+# 停止所有服务
+docker compose down
+
+# 查看服务状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f
+```
+
+> 📚 详细使用指南: [Docker Compose 构建文档](docs/docker-compose-build.md)
 
 
 
@@ -166,7 +205,7 @@ src/neural_manager/neural_pos_ctrl/isaac_pos_ctrl_neural/pos_ctrl_node.py
 
 ### 1️⃣ 启动 PX4 SITL 仿真
 
-> 📚 参考文档: [PX4-NeuPilot](https://github.com/Arclunar/PX4-Neupilot)
+> 📚 参考文档: [PX4-NeuPilot](https://github.com/WarriorHanamy/PX4-Neupilot)
 
 启动 PX4 仿真和 Micro XRCE-DDS Agent。
 

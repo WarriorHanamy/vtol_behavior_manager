@@ -5,7 +5,7 @@ echo "🚀 开始构建 PX4 Simulator 容器..."
 
 # 定义临时目录
 TEMP_DIR=$(mktemp -d)
-REPO_URL="https://github.com/Arclunar/PX4-Neupilot.git"
+REPO_URL="https://github.com/WarriorHanamy/PX4-Neupilot.git"
 
 # 清理函数
 cleanup() {

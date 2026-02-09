@@ -1,0 +1,17 @@
+session_name: vtol-interface-2x2
+windows:
+  - window_name: main
+    layout: tiled
+    panes:
+      - shell_command:
+          - cd /home/rec/vtol-interface
+          - fish
+      - shell_command:
+          - cd /home/rec/vtol-interface
+          - fish
+      - shell_command:
+          - cd /home/rec/vtol-interface
+          - fish
+      - shell_command:
+          - cd /home/rec/vtol-interface
+          - fish

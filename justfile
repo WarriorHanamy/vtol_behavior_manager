@@ -34,13 +34,25 @@ clean:
     [ -d {{justfile_directory()}}/build ] && rm -rf {{justfile_directory()}}/build; [ -d {{justfile_directory()}}/log ] && rm -rf {{justfile_directory()}}/log; [ -d {{justfile_directory()}}/install ] && rm -rf {{justfile_directory()}}/install
 
 build-qgc:
-    docker build -f docker/qgc5.dockerfile \
-    --network=host \
+    docker build \
+    --build-arg http_proxy=http://172.17.0.1:7890 \
+    --build-arg https_proxy=http://172.17.0.1:7890 \
+    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
+    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --build-arg no_proxy=localhost,127.0.0.1 \
+    --build-arg NO_PROXY=localhost,127.0.0.1 \
+    -f docker/qgc5.dockerfile \
     -t qgc5:latest .
 
 build-ros2:
-    docker build -f docker/ros2.dockerfile \
-    --network=host \
+    docker build \
+    --build-arg http_proxy=http://172.17.0.1:7890 \
+    --build-arg https_proxy=http://172.17.0.1:7890 \
+    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
+    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --build-arg no_proxy=localhost,127.0.0.1 \
+    --build-arg NO_PROXY=localhost,127.0.0.1 \
+    -f docker/ros2.dockerfile \
     -t ros2-vtol:latest .
 
 run-qgc:
@@ -71,8 +83,14 @@ run-ros2:
         ros2-vtol
 
 build-px4:
-    docker build -f docker/px4-gazebo.dockerfile \
-    --network=host \
+    docker build \
+    --build-arg http_proxy=http://172.17.0.1:7890 \
+    --build-arg https_proxy=http://172.17.0.1:7890 \
+    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
+    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --build-arg no_proxy=localhost,127.0.0.1 \
+    --build-arg NO_PROXY=localhost,127.0.0.1 \
+    -f docker/px4-gazebo.dockerfile \
     -t px4-gazebo-harmonic:v1 .
 
 run-px4 model="2":
