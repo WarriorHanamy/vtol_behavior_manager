@@ -55,6 +55,19 @@ build-ros2:
     -f docker/ros2.dockerfile \
     -t ros2-vtol:latest .
 
+###########  DONT USE podman ########### for test suit testing now.
+
+build-ros2-podman:
+    podman build \
+    --build-arg http_proxy=http://172.17.0.1:7890 \
+    --build-arg https_proxy=http://172.17.0.1:7890 \
+    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
+    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --build-arg no_proxy=localhost,127.0.0.1 \
+    --build-arg NO_PROXY=localhost,127.0.0.1 \
+    -f docker/ros2.dockerfile \
+    -t ros2-vtol:latest .
+
 run-qgc:
     echo " " | sudo -S chmod 777 /dev/input/event* && \
     docker run --rm \
@@ -79,6 +92,23 @@ run-ros2:
         -v {{justfile_directory()}}/src:/home/ros/ros2_ws/src \
         -v {{justfile_directory()}}/scripts:/home/ros/ros2_ws/scripts \
         -v {{justfile_directory()}}/justfile:/home/ros/ros2_ws/justfile \
+        --name ros2-vtol \
+        ros2-vtol
+
+run-ros2-podman:
+    podman run --rm \
+        --privileged --net=host --ipc=host \
+        -it \
+        --security-opt label=disable \
+        --userns=keep-id \
+        -w /home/ros/ros2_ws \
+        -e DISPLAY=$DISPLAY -e QT_X11_NO_MITSHM=1 \
+        -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
+        -v $HOME/.Xauthority:/home/ros/.Xauthority:Z \
+        -v /tmp/.X11-unix:/tmp/.X11-unix:Z \
+        -v {{justfile_directory()}}/src:/home/ros/ros2_ws/src:Z \
+        -v {{justfile_directory()}}/scripts:/home/ros/ros2_ws/scripts:Z \
+        -v {{justfile_directory()}}/justfile:/home/ros/ros2_ws/justfile:Z \
         --name ros2-vtol \
         ros2-vtol
 
