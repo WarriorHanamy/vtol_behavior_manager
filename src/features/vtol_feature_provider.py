@@ -48,15 +48,18 @@ class VtolFeatureProvider(FeatureProviderBase):
         Args:
             metadata_path: Path to observation_metadata.yaml file
         """
-        super().__init__(metadata_path)
-
-        # Initialize sensor data buffers
+        # Initialize sensor data buffers before calling super().__init__()
+        # This is necessary because super().__init__() calls _validate_implementations()
+        # which in turn calls the get_{feature_name}() methods that depend on these attributes
         self._position_ned: Optional[np.ndarray] = None
         self._velocity_ned: Optional[np.ndarray] = None
         self._quat: Optional[np.ndarray] = None
         self._ang_vel_frd: Optional[np.ndarray] = None
         self._target_pos_ned: Optional[np.ndarray] = None
         self._last_action: Optional[np.ndarray] = None
+
+        # Now call parent class __init__ which will validate implementations
+        super().__init__(metadata_path)
 
     # =========================================================================
     # Sensor Update Methods
