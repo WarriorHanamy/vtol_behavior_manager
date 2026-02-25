@@ -1,0 +1,92 @@
+# Adaptation configuration: mapping model features to sensor data streams
+# This file demonstrates how each 20D observation feature is produced
+# from real sensor data using a sequence of transform steps.
+
+adaptation_version: "1.0"  # Schema/version for adaptation mappings
+description: |
+  Example mappings for PX4-based vehicle sensors. Each feature in the
+  model_schema.yaml is derived from one or more sensor signals via a
+  chain of transforms. See 'mappings' for details.
+
+mappings:
+  # 1) body_vel_flu from VehicleOdometry vx/vy/vz (body frame) -> FLU
+  - feature: body_vel_flu
+    sensor: "VehicleOdometry"  # sensor providing body-frame velocity components
+    source_fields: ["vx", "vy", "vz"]  # 3D velocity components in body frame
+    transform_chain:
+      - step: "to_flu_frame"
+        params:
+          from: "body"
+          to: "flu"
+      - step: "assemble_vector"
+        params:
+          components: ["vx", "vy", "vz"]
+    description: "Derive 3D velocity in FLU by rotating body-frame velocity to FLU."
+
+  # 2) gravity_flu from IMU accelerations -> gravity in FLU
+  - feature: gravity_flu
+    sensor: "IMU"  # accelerometer data (ax, ay, az)
+    source_fields: ["ax", "ay", "az"]
+    transform_chain:
+      - step: "gravity_to_flu"
+        params:
+          frame: "flu"
+      - step: "normalize_gravity"
+        params:
+          g: 9.81
+    description: "Gravity vector in FLU derived from IMU accelerations."
+
+  # 3) ang_vel_flu from gyro data -> angular velocity in FLU
+  - feature: ang_vel_flu
+    sensor: "Gyro"
+    source_fields: ["gx", "gy", "gz"]
+    transform_chain:
+      - step: "to_flu_frame"
+        params:
+          from: "body"
+          to: "flu"
+      - step: "pass_through"
+        params: {}
+    description: "Angular velocity in FLU frame derived from gyroscope readings."
+
+  # 4) current_yaw_encoding from yaw angle -> sin/cos encoding
+  - feature: current_yaw_encoding
+    sensor: "EKF_Attitude"
+    source_fields: ["yaw"]
+    transform_chain:
+      - step: "yaw_to_sin_cos"
+        params:
+          method: "continuous"
+          output_dim: 2
+    description: "Sin/Cos encoding of current yaw angle."
+
+  # 5) target_pos_body from FlightPlan -> body-frame target position
+  - feature: target_pos_body
+    sensor: "FlightPlan"
+    source_fields: ["target_x", "target_y", "target_z"]
+    transform_chain:
+      - step: "target_in_body_frame"
+        params:
+          frame: "body"
+    description: "Target position expressed in the body frame from the flight plan."
+
+  # 6) target_yaw_encoding from target_yaw -> sin/cos encoding
+  - feature: target_yaw_encoding
+    sensor: "FlightPlan"
+    source_fields: ["target_yaw"]
+    transform_chain:
+      - step: "yaw_to_sin_cos"
+        params:
+          method: "continuous"
+          output_dim: 2
+    description: "Sin/Cos encoding of target yaw."
+
+  # 7) last_action from ControllerHistory -> 4D action vector
+  - feature: last_action
+    sensor: "ControllerHistory"
+    source_fields: ["action1", "action2", "action3", "action4"]
+    transform_chain:
+      - step: "reshape_to_dim"
+        params:
+          dim: 4
+    description: "Previous action vector used by the controller."

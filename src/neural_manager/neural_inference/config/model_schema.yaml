@@ -1,0 +1,42 @@
+# Model schema for the neural inference module
+# This file documents the expected observation features fed to the model.
+
+schema_version: "1.0"  # Version of the schema format
+model_name: "drone_pos_ctrl"  # Human-friendly model identifier
+
+# Features describing the 20D observation vector (7 features with varying dims)
+features:
+  # 1) body_vel_flu — 3D linear velocity in the FLU frame
+  - name: body_vel_flu
+    dim: 3
+    description: "Linear velocity in the FLU frame: [vx, vy, vz] in the drone's body orientation."
+
+  # 2) gravity_flu — gravity vector projected into FLU frame
+  - name: gravity_flu
+    dim: 3
+    description: "Projected gravity vector in the FLU frame used for attitude gravity reference."
+
+  # 3) ang_vel_flu — 3D angular velocity in FLU frame
+  - name: ang_vel_flu
+    dim: 3
+    description: "Angular velocity in the FLU frame: [wx, wy, wz]."
+
+  # 4) current_yaw_encoding — yaw encoding as sin/cos
+  - name: current_yaw_encoding
+    dim: 2
+    description: "Sin/Cos encoding of the current yaw: [sin(yaw), cos(yaw)]."
+
+  # 5) target_pos_body — 3D target position in body frame
+  - name: target_pos_body
+    dim: 3
+    description: "Target position expressed in the body frame: [tx, ty, tz]."
+
+  # 6) target_yaw_encoding — target yaw encoding as sin/cos
+  - name: target_yaw_encoding
+    dim: 2
+    description: "Sin/Cos encoding of the target yaw: [sin(target_yaw), cos(target_yaw)]."
+
+  # 7) last_action — previous action taken by the controller
+  - name: last_action
+    dim: 4
+    description: "Previous action vector: [a1, a2, a3, a4]."

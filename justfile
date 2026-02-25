@@ -35,10 +35,11 @@ clean:
 
 build-qgc:
     docker build \
-    --build-arg http_proxy=http://172.17.0.1:7890 \
-    --build-arg https_proxy=http://172.17.0.1:7890 \
-    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
-    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --add-host=internal_proxy:172.17.208.1 \
+    --build-arg http_proxy=http://internal_proxy:7890 \
+    --build-arg https_proxy=http://internal_proxy:7890 \
+    --build-arg HTTP_PROXY=http://internal_proxy:7890 \
+    --build-arg HTTPS_PROXY=http://internal_proxy:7890 \
     --build-arg no_proxy=localhost,127.0.0.1 \
     --build-arg NO_PROXY=localhost,127.0.0.1 \
     -f docker/qgc5.dockerfile \
@@ -46,10 +47,11 @@ build-qgc:
 
 build-ros2:
     docker build \
-    --build-arg http_proxy=http://172.17.0.1:7890 \
-    --build-arg https_proxy=http://172.17.0.1:7890 \
-    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
-    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --add-host=internal_proxy:172.17.208.1 \
+    --build-arg http_proxy=http://internal_proxy:7890 \
+    --build-arg https_proxy=http://internal_proxy:7890 \
+    --build-arg HTTP_PROXY=http://internal_proxy:7890 \
+    --build-arg HTTPS_PROXY=http://internal_proxy:7890 \
     --build-arg no_proxy=localhost,127.0.0.1 \
     --build-arg NO_PROXY=localhost,127.0.0.1 \
     -f docker/ros2.dockerfile \
@@ -59,10 +61,11 @@ build-ros2:
 
 build-ros2-podman:
     podman build \
-    --build-arg http_proxy=http://172.17.0.1:7890 \
-    --build-arg https_proxy=http://172.17.0.1:7890 \
-    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
-    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --add-host=internal_proxy:172.17.208.1 \
+    --build-arg http_proxy=http://internal_proxy:7890 \
+    --build-arg https_proxy=http://internal_proxy:7890 \
+    --build-arg HTTP_PROXY=http://internal_proxy:7890 \
+    --build-arg HTTPS_PROXY=http://internal_proxy:7890 \
     --build-arg no_proxy=localhost,127.0.0.1 \
     --build-arg NO_PROXY=localhost,127.0.0.1 \
     -f docker/ros2.dockerfile \
@@ -114,10 +117,11 @@ run-ros2-podman:
 
 build-px4:
     docker build \
-    --build-arg http_proxy=http://172.17.0.1:7890 \
-    --build-arg https_proxy=http://172.17.0.1:7890 \
-    --build-arg HTTP_PROXY=http://172.17.0.1:7890 \
-    --build-arg HTTPS_PROXY=http://172.17.0.1:7890 \
+    --add-host=internal_proxy:172.17.208.1 \
+    --build-arg http_proxy=http://internal_proxy:7890 \
+    --build-arg https_proxy=http://internal_proxy:7890 \
+    --build-arg HTTP_PROXY=http://internal_proxy:7890 \
+    --build-arg HTTPS_PROXY=http://internal_proxy:7890 \
     --build-arg no_proxy=localhost,127.0.0.1 \
     --build-arg NO_PROXY=localhost,127.0.0.1 \
     -f docker/px4-gazebo.dockerfile \
