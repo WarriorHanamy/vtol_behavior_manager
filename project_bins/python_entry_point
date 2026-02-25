@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Python entry point wrapper for vtol-interface submodule.
+
+set -euo pipefail
+
+# Always use uv run (uses project's Python version)
+PYTHON_CMD="uv run --no-sync python"
+
+# Check if --print-paths flag is provided
+for arg in "$@"; do
+    if [ "$arg" == "--print-paths" ]; then
+        echo "=== Python Entry Point Paths ==="
+        echo "PYTHON_CMD: uv run --no-sync python"
+        echo "================================"
+        # Verify packages are accessible
+        $PYTHON_CMD -c "
+import sys
+try:
+    import onnxruntime
+    print(f'✓ onnxruntime imported from: {onnxruntime.__file__}')
+except ImportError as e:
+    print(f'✗ onnxruntime import failed: {e}')
+try:
+    import numpy
+    print(f'✓ numpy imported from: {numpy.__file__}')
+except ImportError as e:
+    print(f'✗ numpy import failed: {e}')
+try:
+    import yaml
+    print(f'✓ yaml imported from: {yaml.__file__}')
+except ImportError as e:
+    print(f'✗ yaml import failed: {e}')
+"
+        # Remove --print-paths from arguments before passing to script
+        set -- "${@/--print-paths/}"
+        break
+    fi
+done
+
+# Run target script with appropriate Python wrapper
+exec $PYTHON_CMD "$@"
