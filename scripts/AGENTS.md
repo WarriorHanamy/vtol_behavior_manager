@@ -13,7 +13,7 @@
 
 | 脚本 | 功能 |
 |------|------|
-| `build.sh` | 完整构建（config px4msgs + build workspace） |
+| `build.sh` | 构建 ROS2 工作区（含 px4msgs 配置） |
 | `clean.sh` | 清理构建产物 |
 | `neural_mode.sh` | 启动 neural executor demo |
 | `neural_infer.sh` | 运行 neural inference |
@@ -31,11 +31,7 @@
 | `docker_up.sh` | 启动 compose 服务 |
 | `docker_down.sh` | 停止 compose 服务 |
 
-### 其他
 
-| 脚本 | 功能 |
-|------|------|
-| `config_px4msgs.sh` | 配置 PX4 消息 |
 
 ## 环境变量
 
