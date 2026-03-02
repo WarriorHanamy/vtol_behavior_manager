@@ -2,12 +2,6 @@ version = 1
 revision = 3
 requires-python = "==3.10.*"
 
-[manifest]
-members = [
-    "infer-utils",
-    "neural-inference",
-]
-
 [[package]]
 name = "antlr4-python3-runtime"
 version = "4.9.3"
@@ -112,11 +106,6 @@ wheels = [
 ]
 
 [[package]]
-name = "infer-utils"
-version = "0.1.0"
-source = { editable = "src/neural_manager/neural_pos_ctrl/infer_utils" }
-
-[[package]]
 name = "kiwisolver"
 version = "1.4.9"
 source = { registry = "https://pypi.org/simple" }
@@ -185,7 +174,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "hydra-core" },
-    { name = "infer-utils" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "onnxruntime" },
@@ -196,7 +184,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hydra-core" },
-    { name = "infer-utils", editable = "src/neural_manager/neural_pos_ctrl/infer_utils" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "onnxruntime" },
