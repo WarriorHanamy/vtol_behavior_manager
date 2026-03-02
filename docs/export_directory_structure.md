@@ -139,14 +139,14 @@ models = discoverer.list_available_models()
 
 ```bash
 # Export hover model
-./bins/py_exec scripts/rec/export_model_with_metadata.py \
+./agent_bins/py_exec scripts/rec/export_model_with_metadata.py \
     --checkpoint path/to/checkpoint.pt \
     --output ~/policy_exports/hover \
     --name vtol-hover-v1.0.0 \
     --version 1.0.0
 
 # Export collision_avoidance model
-./bins/py_exec scripts/rec/export_model_with_metadata.py \
+./agent_bins/py_exec scripts/rec/export_model_with_metadata.py \
     --checkpoint path/to/checkpoint.pt \
     --output ~/policy_exports/collision_avoidance \
     --name vtol-collision-v1.0.0 \
