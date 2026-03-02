@@ -34,7 +34,7 @@ clean:
     [ -d {{justfile_directory()}}/build ] && rm -rf {{justfile_directory()}}/build; [ -d {{justfile_directory()}}/log ] && rm -rf {{justfile_directory()}}/log; [ -d {{justfile_directory()}}/install ] && rm -rf {{justfile_directory()}}/install
 
 build-qgc:
-    docker build \
+    DOCKER_BUILDKIT=1 docker build \
     --add-host=internal_proxy:172.17.208.1 \
     --build-arg http_proxy=http://internal_proxy:7890 \
     --build-arg https_proxy=http://internal_proxy:7890 \
@@ -46,7 +46,7 @@ build-qgc:
     -t qgc5:latest .
 
 build-ros2:
-    docker build \
+    DOCKER_BUILDKIT=1 docker build \
     --add-host=internal_proxy:172.17.208.1 \
     --build-arg http_proxy=http://internal_proxy:7890 \
     --build-arg https_proxy=http://internal_proxy:7890 \
@@ -116,7 +116,7 @@ run-ros2-podman:
         ros2-vtol
 
 build-px4:
-    docker build \
+    DOCKER_BUILDKIT=1 docker build \
     --add-host=internal_proxy:172.17.208.1 \
     --build-arg http_proxy=http://internal_proxy:7890 \
     --build-arg https_proxy=http://internal_proxy:7890 \
