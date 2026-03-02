@@ -130,6 +130,9 @@ class FeatureProviderBase:
 
         Returns:
             List of FeatureValidationResult objects for all features
+
+        Raises:
+            RuntimeError: If any feature validation fails
         """
         results = []
 
@@ -191,7 +194,35 @@ class FeatureProviderBase:
                     )
                 )
 
+        # Raise error if any validation failed
+        self._raise_on_validation_failure(results)
+
         return results
+
+    @staticmethod
+    def _raise_on_validation_failure(
+        results: List[FeatureValidationResult],
+    ) -> None:
+        """
+        Raise RuntimeError if any validation failed.
+
+        Args:
+            results: List of FeatureValidationResult objects
+
+        Raises:
+            RuntimeError: If any feature validation fails
+        """
+        failed_results = [r for r in results if not r.passed]
+        if not failed_results:
+            return
+
+        error_lines = [
+            f"Feature validation failed for {len(failed_results)} feature(s):"
+        ]
+        for result in failed_results:
+            error_lines.append(f"  - {result.feature_name}: {result.error_message}")
+
+        raise RuntimeError("\n".join(error_lines))
 
     def _print_validation_report(self, results: List[FeatureValidationResult]) -> None:
         """
