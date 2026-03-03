@@ -1,29 +1,29 @@
 {
   "tasks": [
     {
-      "task": "Design ROS Environment Bootstrap Logic",
-      "description": "Define mandatory ROS setup loading behavior for the Python wrapper startup.",
+      "task": "Define ROS Environment Bootstrap Contract",
+      "description": "Define deterministic ROS environment loading rules for the agent Python wrapper.",
       "project-dir": "/home/rec/server/vtol-interface",
       "steps": [
         {
           "step": 1,
-          "description": "Define ROS_DISTRO resolution order with default value humble."
+          "description": "Define ROS_DISTRO fallback value as humble when input is empty."
         },
         {
           "step": 2,
-          "description": "Define setup file discovery for /opt/ros/<distro>/setup.bash path."
+          "description": "Define setup file path pattern as /opt/ros/<distro>/setup.bash."
         },
         {
           "step": 3,
-          "description": "Define failure output contract for missing ROS setup file."
+          "description": "Define failure contract with non-zero exit status for missing setup file."
         }
       ],
-      "acceptance-criteria": "Wrapper startup must always attempt ROS environment loading before Python execution. ROS distro selection must default to humble when ROS_DISTRO is unset. Missing /opt/ros/<distro>/setup.bash must return non-zero exit code with explicit failure message.",
+      "acceptance-criteria": "Wrapper startup must resolve ROS_DISTRO deterministically with default humble. Wrapper startup must derive setup path exactly as /opt/ros/<distro>/setup.bash. Wrapper startup must stop execution with non-zero status when setup file is missing.",
       "test-plan": {
         "unit": [
-          "Given ROS_DISTRO is unset, bootstrap logic resolves distro value to humble.",
-          "Given ROS_DISTRO=foxy and /opt/ros/foxy/setup.bash exists, bootstrap logic selects that exact file path.",
-          "Given selected setup path is absent, bootstrap logic emits one failure line and returns non-zero status."
+          "Given empty ROS_DISTRO input, resolver returns humble as the selected distro.",
+          "Given ROS_DISTRO=foxy input, resolver returns setup path /opt/ros/foxy/setup.bash.",
+          "Given nonexistent setup path input, bootstrap validator returns a non-zero status with a single explicit error line."
         ],
         "integration": [],
         "e2e-manual": []
@@ -35,43 +35,76 @@
       "complete": false
     },
     {
-      "task": "Integrate ROS Bootstrap Into Python Wrapper",
-      "description": "Update the agent Python wrapper so uv-run Python always inherits ROS Python paths.",
+      "task": "Integrate ROS Bootstrap Into Wrapper Entry",
+      "description": "Update ./agent_bins/python to load ROS setup before launching uv-run Python.",
       "project-dir": "/home/rec/server/vtol-interface",
       "steps": [
         {
           "step": 1,
-          "description": "Insert bootstrap call before constructing final uv run command execution."
+          "description": "Source resolved ROS setup script before building the final exec command."
         },
         {
           "step": 2,
-          "description": "Preserve current CLI argument forwarding contract for wrapper invocations."
+          "description": "Preserve current argument forwarding behavior for all wrapper invocations."
         },
         {
           "step": 3,
-          "description": "Preserve current --print-paths diagnostics output contract for wrapper users."
-        },
-        {
-          "step": 4,
-          "description": "Add diagnostics lines for resolved ROS distro plus setup status."
+          "description": "Keep uv run --no-sync python as the executed interpreter command."
         }
       ],
-      "acceptance-criteria": "Wrapper must source /opt/ros/<distro>/setup.bash before uv execution on every run. Wrapper must execute Python with the exact command uv run --no-sync python. uv-run Python must inherit ROS-related environment variables including PYTHONPATH. Wrapper must fail fast when ROS setup cannot be loaded. --print-paths output must include ROS setup status details.",
+      "acceptance-criteria": "Wrapper must source ROS setup before any Python execution path. Wrapper must keep the interpreter command as uv run --no-sync python. Wrapper must preserve positional argument order for target scripts. Wrapper must fail fast when ROS setup loading fails.",
       "test-plan": {
         "unit": [
-          "With mocked environment map from Task 'Design ROS Environment Bootstrap Logic', command builder prepends ROS setup call before uv run invocation.",
-          "With mock command assembly input, built execution command equals literal uv run --no-sync python before forwarded args.",
-          "With mock CLI args ['script.py','--flag','value'], wrapper forwards args unchanged after bootstrap stage.",
-          "With mock missing setup result from Task 'Design ROS Environment Bootstrap Logic', wrapper exits non-zero without building uv run command.",
-          "With mock successful setup result from Task 'Design ROS Environment Bootstrap Logic', diagnostics formatter includes distro name and setup success marker."
+          "Given mocked resolver output from task 'Define ROS Environment Bootstrap Contract', command assembly prepends a source operation before uv invocation.",
+          "Given mock argv ['script.py','--flag','value'], wrapper argument builder returns the same ordered argv after bootstrap stage.",
+          "Given mock bootstrap failure status from task 'Define ROS Environment Bootstrap Contract', wrapper exits non-zero without executing uv run command."
         ],
         "integration": [
-          "Connect wrapper with real bootstrap logic from Task 'Design ROS Environment Bootstrap Logic' and verify ROS_DISTRO=humble loads /opt/ros/humble/setup.bash when present.",
-          "Connect wrapper with real bootstrap logic from Task 'Design ROS Environment Bootstrap Logic' and verify child uv Python process prints inherited ROS PYTHONPATH segments.",
-          "Connect wrapper with real bootstrap logic from Task 'Design ROS Environment Bootstrap Logic' and verify missing ROS setup file returns non-zero exit code."
+          "Connect wrapper flow with real rules from task 'Define ROS Environment Bootstrap Contract' and verify ROS_DISTRO=humble loads /opt/ros/humble/setup.bash when present.",
+          "Connect wrapper flow with real rules from task 'Define ROS Environment Bootstrap Contract' and verify child process inherits ROS PYTHONPATH values after setup loading.",
+          "Connect wrapper flow with real rules from task 'Define ROS Environment Bootstrap Contract' and verify missing setup path returns non-zero exit code."
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol",
+        "writing-bash-scripts"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Add ROS Diagnostics For Wrapper Verification",
+      "description": "Extend --print-paths output to report ROS distro, setup file, and bootstrap status.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Print resolved ROS_DISTRO value inside --print-paths diagnostics output."
+        },
+        {
+          "step": 2,
+          "description": "Print resolved setup script path inside --print-paths diagnostics output."
+        },
+        {
+          "step": 3,
+          "description": "Print bootstrap success or failure marker in diagnostics output."
+        }
+      ],
+      "acceptance-criteria": "--print-paths output must include resolved ROS_DISTRO. --print-paths output must include setup script absolute path. --print-paths output must include explicit bootstrap status text. Wrapper behavior must remain backward compatible for existing diagnostics lines.",
+      "test-plan": {
+        "unit": [
+          "Given mock diagnostics input with ROS_DISTRO=humble, formatter output contains a ROS_DISTRO line with value humble.",
+          "Given mock diagnostics input with setup path /opt/ros/humble/setup.bash, formatter output contains that exact path string.",
+          "Given mock diagnostics input with bootstrap failure state, formatter output contains a failure marker line."
+        ],
+        "integration": [
+          "Connect diagnostics path with real wrapper from task 'Integrate ROS Bootstrap Into Wrapper Entry' and verify --print-paths includes ROS lines plus previous package import checks.",
+          "Connect diagnostics path with real wrapper from task 'Integrate ROS Bootstrap Into Wrapper Entry' and verify missing setup path surfaces non-zero status with ROS failure details."
         ],
         "e2e-manual": [
-          "Run a representative ROS-aware Python entry via ./agent_bins/python and confirm runtime imports ROS Python modules."
+          "Run ./agent_bins/python --print-paths on a ROS-enabled host and verify reported ROS values match the active shell environment.",
+          "Run a ROS Python import through ./agent_bins/python and verify import succeeds after bootstrap in an interactive shell session."
         ]
       },
       "skills": [

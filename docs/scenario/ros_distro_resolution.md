@@ -1,0 +1,19 @@
+# Scenario: ROS_DISTRO Resolution
+- Given: A bash environment with or without ROS_DISTRO set
+- When: The wrapper script starts
+- Then: The correct ROS distribution is selected
+
+## Test Steps
+
+- Case 1 (ROS_DISTRO set): ROS_DISTRO environment variable is set to "foxy"
+- Case 2 (ROS_DISTRO unset): ROS_DISTRO environment variable is not set
+- Case 3 (ROS_DISTRO empty): ROS_DISTRO environment variable is set but empty
+
+## Status
+- [x] Write scenario document
+- [ ] Write solid test according to document
+- [ ] Run test and watch it failing
+- [ ] Implement to make test pass
+- [ ] Run test and confirm it passed
+- [ ] Refactor implementation without breaking test
+- [ ] Run test and confirm still passing after refactor
