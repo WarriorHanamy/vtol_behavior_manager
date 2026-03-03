@@ -1,0 +1,164 @@
+{
+  "tasks": [
+    {
+      "task": "Stabilize System A Sensor Contract",
+      "description": "Define and enforce a single System A sensor ingress contract through VtolFeatureProvider update interfaces.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Inventory every sensor ingress call site in neural inference modules."
+        },
+        {
+          "step": 2,
+          "description": "Route each ingress path into VtolFeatureProvider update methods."
+        },
+        {
+          "step": 3,
+          "description": "Preserve startup validation behavior in FeatureProviderBase."
+        }
+      ],
+      "acceptance-criteria": "All sensor ingress paths must enter features through update_vehicle_odom, update_imu, update_target, or update_last_action. Startup validation must fail fast on missing get_{feature} providers. Startup validation must fail fast on feature dimension mismatches.",
+      "test-plan": {
+        "unit": [
+          "Given mock odometry arrays with valid shapes, update_vehicle_odom followed by get_to_target_b returns a 3-element float32 vector when target and quaternion are present.",
+          "Given mock angular velocity input, update_imu followed by get_ang_vel_b returns a 3-element float32 vector with FRD-to-FLU sign conversion applied.",
+          "Given metadata feature name 'missing_feature' without get_missing_feature implementation, FeatureProviderBase initialization raises RuntimeError with missing method details.",
+          "Given metadata dimension 3 and provider output length 2, FeatureProviderBase initialization raises RuntimeError with dimension mismatch details."
+        ],
+        "integration": [],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Rewire Inference Flow To System A",
+      "description": "Refactor node composition to run inference only through System A feature flow and remove System B runtime entry points.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Bind RosSensorBridge callbacks to VtolFeatureProvider state updates."
+        },
+        {
+          "step": 2,
+          "description": "Build infer observations from metadata ordered get_{feature} methods."
+        },
+        {
+          "step": 3,
+          "description": "Keep zero padding behavior for unavailable feature values."
+        }
+      ],
+      "acceptance-criteria": "Inference runtime must not call adaptor or communicator registry APIs. Observation concatenation must follow metadata feature order exactly. Missing feature values must be converted into float32 zero vectors with metadata dimensions.",
+      "test-plan": {
+        "unit": [
+          "Given a mock provider metadata order [a,b,c], infer() concatenates outputs in [a,b,c] order with exact expected lengths.",
+          "Given a feature method returning None for feature dim 4, infer() returns a float32 zero vector of length 4 for that feature slot.",
+          "Given feature_name not present in metadata, infer(feature_name) raises ValueError listing available features."
+        ],
+        "integration": [
+          "When connected to task 'Stabilize System A Sensor Contract' real provider, RosSensorBridge odometry callback updates provider state and infer() produces a non-empty observation vector.",
+          "When connected to task 'Stabilize System A Sensor Contract' real provider, startup fails before runtime inference if metadata-provider dimensions are incompatible."
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "tdd-workflow",
+        "testing-safe-protocol",
+        "systematic-debugging"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Remove System B Modules And References",
+      "description": "Delete adaptor and communicator framework artifacts and eliminate all System B imports, configs, and references.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Delete adaptor module files after System A rewiring passes."
+        },
+        {
+          "step": 2,
+          "description": "Delete communicator module files after System A rewiring passes."
+        },
+        {
+          "step": 3,
+          "description": "Remove adaptation config usage from runtime and tests."
+        },
+        {
+          "step": 4,
+          "description": "Clean documentation references to retired System B architecture."
+        }
+      ],
+      "acceptance-criteria": "Runtime code must contain zero imports from neural_inference.adaptors modules. Runtime code must contain zero imports from neural_inference.communicators modules. No execution path must reference register_adaptor, get_adaptor, register_communicator, or get_communicator. Configuration loading must not require adaptation_config.yaml.",
+      "test-plan": {
+        "unit": [
+          "Given module import traversal across runtime packages, importing succeeds without ModuleNotFoundError from removed adaptor or communicator paths.",
+          "Given static search for registry API names in runtime source, zero executable references are present after removal.",
+          "Given runtime configuration load for inference node, loading succeeds without adaptation_config.yaml dependency."
+        ],
+        "integration": [
+          "With task 'Rewire Inference Flow To System A' complete, inference node initializes and runs callback wiring with removed System B modules.",
+          "With task 'Rewire Inference Flow To System A' complete, inference loop still produces control command vectors after System B file deletion."
+        ],
+        "e2e-manual": []
+      },
+      "skills": [
+        "verification-before-completion",
+        "testing-safe-protocol"
+      ],
+      "complete": false
+    },
+    {
+      "task": "Validate System A End To End",
+      "description": "Execute regression validation for the System A only stack across startup, runtime, and failure-path behavior.",
+      "project-dir": "/home/rec/server/vtol-interface",
+      "steps": [
+        {
+          "step": 1,
+          "description": "Run automated regression suites for features and inference modules."
+        },
+        {
+          "step": 2,
+          "description": "Exercise startup failure cases for missing providers and mismatched dimensions."
+        },
+        {
+          "step": 3,
+          "description": "Perform manual ROS2 runtime verification for publish and subscribe behavior."
+        },
+        {
+          "step": 4,
+          "description": "Publish migration notes that declare System B retirement status."
+        }
+      ],
+      "acceptance-criteria": "System A only runtime should initialize and sustain inference loop execution under expected ROS2 inputs. Error paths must emit actionable diagnostics for missing providers or invalid dimensions. Documentation must state that System B is retired and must describe the System A only flow.",
+      "test-plan": {
+        "unit": [
+          "Given missing provider method metadata, startup error includes feature name and missing method identifier.",
+          "Given dimension mismatch metadata, startup error includes expected and actual dimensions for the failing feature.",
+          "Given ROS callback exceptions in bridge handlers, warning logs are emitted and node process remains alive."
+        ],
+        "integration": [
+          "With tasks 'Stabilize System A Sensor Contract', 'Rewire Inference Flow To System A', and 'Remove System B Modules And References' complete, startup to infer to publish flow executes without adaptor or communicator dependencies.",
+          "With real lower layers active, RosSensorBridge subscriptions update provider state and control outputs are published at configured timer cadence."
+        ],
+        "e2e-manual": [
+          "Run ROS2 integration for at least 5 minutes and verify no crashes while control outputs continue publishing.",
+          "Observe live topics and confirm odometry, IMU, GPS ingestion drives non-empty observation vectors and bounded control outputs.",
+          "Review operator logs and confirm retired System B paths never appear during startup or runtime."
+        ]
+      },
+      "skills": [
+        "verification-before-completion",
+        "testing-safe-protocol",
+        "systematic-debugging"
+      ],
+      "complete": false
+    }
+  ]
+}
