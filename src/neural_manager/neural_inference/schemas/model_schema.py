@@ -13,12 +13,10 @@ class FeatureSpec:
     Attributes:
         name: Unique identifier for the feature.
         dim: Dimensionality of the feature vector.
-        description: Optional human-readable description.
     """
 
     name: str
     dim: int
-    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -88,7 +86,6 @@ class ModelSchema:
             FeatureSpec(
                 name=feat["name"],
                 dim=feat["dim"],
-                description=feat.get("description", ""),
             )
             for feat in features_list
         )

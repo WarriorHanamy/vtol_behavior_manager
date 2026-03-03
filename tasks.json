@@ -23,7 +23,7 @@
         "e2e-manual": []
       },
       "skills": ["tdd-workflow"],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Remove legacy model_discovery.py",

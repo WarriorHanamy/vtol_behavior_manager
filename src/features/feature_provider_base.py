@@ -33,14 +33,10 @@ class FeatureSpec:
     Attributes:
         name: Feature name
         dim: Feature dimension
-        dtype: Data type (e.g., "float32", "float64")
-        description: Human-readable description (optional)
     """
 
     name: str
     dim: int
-    dtype: str
-    description: Optional[str] = None
 
 
 @dataclass
@@ -103,6 +99,8 @@ class FeatureProviderBase:
         """
         Parse observation_metadata.yaml and return list of FeatureSpec.
 
+        Expects format: {'low_dim': [{'name': '...', 'dim': N}, ...]}
+
         Returns:
             List of FeatureSpec objects parsed from metadata file
         """
@@ -110,12 +108,10 @@ class FeatureProviderBase:
             data = yaml.safe_load(f)
 
         features = []
-        for feature_data in data.get("features", []):
+        for feature_data in data.get("low_dim", []):
             spec = FeatureSpec(
                 name=feature_data["name"],
                 dim=feature_data["dim"],
-                dtype=feature_data["dtype"],
-                description=feature_data.get("description"),
             )
             features.append(spec)
 
