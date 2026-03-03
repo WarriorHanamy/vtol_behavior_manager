@@ -71,7 +71,7 @@
         "testing-safe-protocol",
         "systematic-debugging"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Remove System B Modules And References",
