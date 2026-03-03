@@ -71,7 +71,7 @@
         "testing-safe-protocol",
         "writing-bash-scripts"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Add ROS Diagnostics For Wrapper Verification",

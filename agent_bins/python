@@ -1,19 +1,59 @@
 #!/usr/bin/env bash
 # Python entry point wrapper for vtol-interface submodule.
+# This wrapper loads ROS environment before executing Python scripts.
 
 set -euo pipefail
 
-# Always use uv run (uses project's Python version)
-PYTHON_CMD="uv run --no-sync python"
+# Default ROS distribution
+readonly DEFAULT_ROS_DISTRO="humble"
 
-# Check if --print-paths flag is provided
-for arg in "$@"; do
-    if [ "$arg" == "--print-paths" ]; then
-        echo "=== Python Entry Point Paths ==="
-        echo "PYTHON_CMD: uv run --no-sync python"
-        echo "================================"
-        # Verify packages are accessible
-        $PYTHON_CMD -c "
+# Always use uv run (uses project's Python version)
+readonly PYTHON_CMD="uv run --no-sync python"
+
+# Function: load_ros_bootstrap
+# Description: Load ROS environment by resolving and sourcing setup file
+# Effects:
+#   - Sets ROS_DISTRO variable (default: humble)
+#   - Sources /opt/ros/${ROS_DISTRO}/setup.bash
+#   - Exits with error code 1 if setup file is missing
+load_ros_bootstrap() {
+    # Resolve ROS_DISTRO environment variable
+    # If not set or empty, use default
+    local ros_distro="${ROS_DISTRO:-$DEFAULT_ROS_DISTRO}"
+    if [ -z "$ros_distro" ]; then
+        ros_distro="$DEFAULT_ROS_DISTRO"
+    fi
+
+    # Derive setup file path pattern: /opt/ros/<distro>/setup.bash
+    local setup_file="/opt/ros/${ros_distro}/setup.bash"
+
+    # Validate setup file exists
+    if [ ! -f "$setup_file" ]; then
+        echo "Error: ROS setup file not found: ${setup_file}" >&2
+        echo "Please ensure ROS ${ros_distro} is installed or set ROS_DISTRO to a valid distribution" >&2
+        exit 1
+    fi
+
+    # Source the ROS setup file
+    # shellcheck source=/dev/null
+    source "$setup_file"
+
+    # Export ROS_DISTRO for child processes
+    export ROS_DISTRO="$ros_distro"
+}
+
+# Function: print_paths_info
+# Description: Print Python and ROS environment information
+# Used when --print-paths flag is provided
+print_paths_info() {
+    echo "=== Python Entry Point Paths ==="
+    echo "PYTHON_CMD: uv run --no-sync python"
+    echo "ROS_DISTRO: ${ROS_DISTRO}"
+    echo "ROS_SETUP: /opt/ros/${ROS_DISTRO}/setup.bash"
+    echo "================================"
+
+    # Verify packages are accessible
+    $PYTHON_CMD -c "
 import sys
 try:
     import onnxruntime
@@ -31,6 +71,15 @@ try:
 except ImportError as e:
     print(f'✗ yaml import failed: {e}')
 "
+}
+
+# Load ROS environment before any Python execution
+load_ros_bootstrap
+
+# Check if --print-paths flag is provided
+for arg in "$@"; do
+    if [ "$arg" == "--print-paths" ]; then
+        print_paths_info
         # Remove --print-paths from arguments before passing to script
         set -- "${@/--print-paths/}"
         break
