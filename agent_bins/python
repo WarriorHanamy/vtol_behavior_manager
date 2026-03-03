@@ -10,6 +10,9 @@ readonly DEFAULT_ROS_DISTRO="humble"
 # Always use uv run (uses project's Python version)
 readonly PYTHON_CMD="uv run --no-sync python"
 
+# Bootstrap status (set during load_ros_bootstrap)
+ROS_BOOTSTRAP_STATUS="FAILED"
+
 # Function: load_ros_bootstrap
 # Description: Load ROS environment by resolving and sourcing setup file
 # Effects:
@@ -35,8 +38,14 @@ load_ros_bootstrap() {
     fi
 
     # Source the ROS setup file
+    # Temporarily allow undefined variables since ROS setup may reference them before definition
     # shellcheck source=/dev/null
+    set +u  # Allow undefined variables temporarily
     source "$setup_file"
+    set -u  # Restore strict mode
+
+    # Set bootstrap status to success
+    ROS_BOOTSTRAP_STATUS="SUCCESS"
 
     # Export ROS_DISTRO for child processes
     export ROS_DISTRO="$ros_distro"
@@ -50,6 +59,7 @@ print_paths_info() {
     echo "PYTHON_CMD: uv run --no-sync python"
     echo "ROS_DISTRO: ${ROS_DISTRO}"
     echo "ROS_SETUP: /opt/ros/${ROS_DISTRO}/setup.bash"
+    echo "ROS_BOOTSTRAP: ${ROS_BOOTSTRAP_STATUS}"
     echo "================================"
 
     # Verify packages are accessible
@@ -77,14 +87,25 @@ except ImportError as e:
 load_ros_bootstrap
 
 # Check if --print-paths flag is provided
+print_paths_flag=false
+new_args=()
 for arg in "$@"; do
     if [ "$arg" == "--print-paths" ]; then
-        print_paths_info
-        # Remove --print-paths from arguments before passing to script
-        set -- "${@/--print-paths/}"
-        break
+        print_paths_flag=true
+    else
+        new_args+=("$arg")
     fi
 done
+
+if [ "$print_paths_flag" = true ]; then
+    print_paths_info
+    # If --print-paths was the only flag, exit with success
+    if [ ${#new_args[@]} -eq 0 ]; then
+        exit 0
+    fi
+    # Otherwise, execute with remaining arguments
+    exec $PYTHON_CMD "${new_args[@]}"
+fi
 
 # Run target script with appropriate Python wrapper
 exec $PYTHON_CMD "$@"
