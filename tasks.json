@@ -32,7 +32,7 @@
         "tdd-workflow",
         "testing-safe-protocol"
       ],
-      "complete": false
+      "complete": true
     },
     {
       "task": "Integrate ROS Bootstrap Into Wrapper Entry",

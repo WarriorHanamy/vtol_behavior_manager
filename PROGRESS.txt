@@ -1,0 +1,87 @@
+================================================================================
+TASK ID: ros-env-bootstrap-contract
+TASK NAME: Define ROS Environment Bootstrap Contract
+STATUS: complete
+TIMESTAMP: 2026-03-03T12:30:00Z
+WORKER AGENT: Worker-v2
+================================================================================
+OBJECTIVE (Acceptance Criteria):
+   Wrapper startup must resolve ROS_DISTRO deterministically with default humble. 
+   Wrapper startup must derive setup path exactly as /opt/ros/<distro>/setup.bash.
+   Wrapper startup must stop execution with non-zero status when setup file is 
+   missing.
+
+STEPS PROVIDED:
+   1. Define ROS_DISTRO fallback value as humble when input is empty.
+   2. Define setup file path pattern as /opt/ros/<distro>/setup.bash.
+   3. Define failure contract with non-zero exit status for missing setup file.
+
+STEPS EXECUTED:
+   ✓ Step 1: Created wrapper script at scripts/ros_wrapper.sh with ROS_DISTRO resolution logic
+   ✓ Step 2: Implemented setup file path pattern /opt/ros/${ROS_DISTRO}/setup.bash
+   ✓ Step 3: Defined failure contract with exit code 1 and explicit error message
+
+WORK COMPLETED:
+   1. Created ROS environment bootstrap wrapper script at scripts/ros_wrapper.sh
+   2. Implemented deterministic ROS_DISTRO resolution with default "humble"
+   3. Implemented setup file path derivation: /opt/ros/<distro>/setup.bash
+   4. Implemented failure contract for missing setup files (non-zero exit code + explicit error)
+   5. Fixed test_suggest_ros_distro_in_error to use non-existent distro instead of renaming system directories
+   6. All 9 tests passing across 3 test suites
+   7. Updated scenario documents to mark all TDD steps as complete
+   8. Created TDD summary documentation in completed-tdd-archives/
+
+FILES MODIFIED:
+   - scripts/ros_wrapper.sh (created, 54 lines)
+   - tests/scenario/test_failure_handling.py (modified, fixed test to use non-existent distro)
+   - docs/scenario/ros_distro_resolution.md (updated, marked all TDD checkboxes complete)
+   - docs/scenario/ros_setup_file_discovery.md (updated, marked all TDD checkboxes complete)
+   - docs/scenario/failure_handling.md (updated, marked all TDD checkboxes complete)
+
+FILES CREATED:
+   - scripts/ros_wrapper.sh
+   - completed-tdd-archives/tdd-20260303-123000/ (directory with step-0.md through step-7.md)
+
+KEY DECISIONS:
+   - Shell script implementation (ros_wrapper.sh) for simple environment setup and script execution
+   - Uses bash parameter expansion ${ROS_DISTRO:-$DEFAULT_ROS_DISTRO} for default value handling
+   - Additional check for empty string with if [ -z "$ROS_DISTRO" ]
+   - Fixed test permission issue by using python3 interpreter instead of direct script execution
+   - Fixed test_suggest_ros_distro_in_error to avoid permission denied error when renaming system directories
+
+BLOCKERS RESOLVED:
+   - Test permission error: Temporary Python scripts didn't have execute permission, fixed by using python3 interpreter
+   - Test permission error: test_suggest_ros_distro_in_error tried to rename /opt/ros/humble requiring root, fixed by using non-existent distro name
+
+REMAINING ISSUES:
+   - None
+
+NOTES FOR NEXT AGENT:
+   - The wrapper script is complete and all tests pass
+   - Wrapper accepts Python script path as argument: ./ros_wrapper.sh script.py [args...]
+   - Default ROS_DISTRO is "humble", can be overridden via environment variable
+   - Wrapper exits with code 1 and displays error message if setup file is missing
+   - No additional dependencies required - standard bash and python3
+
+ACCEPTANCE CRITERIA VERIFICATION:
+   ✓ Criterion 1: Wrapper startup must resolve ROS_DISTRO deterministically with default humble - VERIFIED (test_ros_distro_set, test_ros_distro_unset, test_ros_distro_empty all passing)
+   ✓ Criterion 2: Wrapper startup must derive setup path exactly as /opt/ros/<distro>/setup.bash - VERIFIED (implementation uses SETUP_FILE="/opt/ros/${ROS_DISTRO}/setup.bash")
+   ✓ Criterion 3: Wrapper startup must stop execution with non-zero status when setup file is missing - VERIFIED (test_missing_setup_file_with_error_message, test_missing_setup_file_with_custom_distro, test_suggest_ros_distro_in_error all passing with exit code 1)
+
+TESTING RESULTS:
+   ✓ Unit tests: 9/9 passing (3 test files, 3 tests each)
+   ✓ Test coverage: All acceptance criteria covered
+   ✓ Regression test: All tests pass, no regressions
+   ✓ TDD workflow: RED -> GREEN -> REFACTOR cycle completed
+
+TDD WORKFLOW COMPLETED:
+   ✓ Step 0: Checked existing progress - scenario docs and tests existed
+   ✓ Step 1: Understood intent - 3 functional requirements defined
+   ✓ Step 2: Scenario docs written - 3 scenario documents already existed
+   ✓ Step 3: Failing tests written - 9 tests written and confirmed failing (FileNotFoundError)
+   ✓ Step 4: Implemented to pass - wrapper script created, all 9 tests passing
+   ✓ Step 5: Refactored for maintainability - implementation already minimal and clean
+   ✓ Step 6: Regression test - complete test suite run, all passing
+   ✓ Step 7: Final review - all acceptance criteria verified
+
+================================================================================
