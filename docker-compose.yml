@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: docker/qgc5.dockerfile
-    image: qgc5:latest
+    image: qgc5-vtol:latest
 
     restart: no
     privileged: true
@@ -66,7 +66,7 @@ services:
     build:
       context: .
       dockerfile: docker/px4-gazebo.dockerfile
-    image: px4-gazebo-harmonic:v1
+    image: px4-gazebo-harmonic-vtol:v1
 
     restart: no
     privileged: true

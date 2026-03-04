@@ -18,7 +18,8 @@ ARG NO_PROXY
 SHELL ["/bin/bash", "-c"]
 
 
-RUN apt update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt update && \
     apt install -y gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl \
     libfuse2 fuse libxcb-xinerama0 libxkbcommon-x11-0 libxcb-cursor-dev
 
@@ -33,7 +34,8 @@ RUN groupadd -r qgc && useradd -m -g qgc -u 1000 qgc
 RUN ln -s /app/QGroundControl-x86_64.AppImage /usr/local/bin/qgc
 RUN chown -R qgc:qgc /app
 
-RUN apt install -y software-properties-common && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt install -y software-properties-common && \
     add-apt-repository ppa:maveonair/helix-editor && \
     apt update && \
     apt install -y helix && \
@@ -41,6 +43,6 @@ RUN apt install -y software-properties-common && \
 
 USER qgc
 WORKDIR /home/qgc
-COPY ./QGroundControl.ini /home/qgc/.config/QGroundControl/QGroundControl.ini
+COPY ./docker/assets/QGroundControl.ini /home/qgc/.config/QGroundControl/QGroundControl.ini
 RUN mkdir ulgs/
 RUN chmod 777 ulgs/
