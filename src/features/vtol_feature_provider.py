@@ -172,6 +172,26 @@ class VtolFeatureProvider(FeatureProviderBase):
 
         return gravity_flu_norm
 
+    def get_lin_vel_b(self) -> Optional[np.ndarray]:
+        """
+        Get linear velocity in FLU body frame.
+
+        Computes: Transform linear velocity from NED world frame to FLU body frame
+
+        Returns:
+            3D numpy array in FLU frame, or None if data unavailable
+        """
+        if self._velocity_ned is None or self._quat is None:
+            return None
+
+        # Transform from NED to FRD using quaternion
+        velocity_frd = self._ned_to_frd(self._quat, self._velocity_ned)
+
+        # Transform from FRD to FLU
+        velocity_flu = self._frd_to_flu(velocity_frd)
+
+        return velocity_flu
+
     def get_ang_vel_b(self) -> Optional[np.ndarray]:
         """
         Get angular velocity in FLU body frame.
