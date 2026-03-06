@@ -1,0 +1,18 @@
+#!/bin/bash
+# Execute command in running ROS2 container
+
+set -e
+
+CONTAINER_NAME=$(docker ps --filter "name=vtol-interface-ros2" --format "{{.Names}}" | head -n 1)
+
+if [ -z "$CONTAINER_NAME" ]; then
+    echo "Error: No running container with name prefix 'vtol-interface-ros2' found"
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    echo "Usage: ros_exec <command> [args...]"
+    exit 1
+fi
+
+docker exec "$CONTAINER_NAME" bash -c "source /opt/ros/*/setup.bash && if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi && exec \"\$@\"" _ "$@"
