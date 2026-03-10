@@ -2,24 +2,8 @@
 #
 # PX4 Gazebo 8 (Harmonic) development environment in Ubuntu 22.04 Jammy
 #
-
-# 同时声明大小写 ARG
-ARG http_proxy=http://172.17.0.1:7890
-ARG HTTP_PROXY=${http_proxy}
-ARG https_proxy=${http_proxy}
-ARG HTTPS_PROXY=${http_proxy}
-ARG no_proxy=localhost,127.0.0.1
-ARG NO_PROXY=${no_proxy}
-
 FROM px4io/px4-dev-base-jammy:2024-05-18
 
-# 声明 ARG 以便在后续使用
-ARG http_proxy
-ARG HTTP_PROXY
-ARG https_proxy
-ARG HTTPS_PROXY
-ARG no_proxy
-ARG NO_PROXY
 # Original author: Steven Cheng <zhenghw23@foxmail.com> (Arclunar)
 LABEL maintainer="WarriorHanamy <rongerch@outlook.com>"
 
@@ -95,15 +79,4 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt install -y helix && \
     echo "alias vim='hx'" >> /root/.bashrc
 
-# FROM osrf/ros:humble-desktop AS ros-deps
-
-# WORKDIR /plugins
-# COPY ../src/aerodynamics plugins/aerodynamics
-# COPY ../src/external_libraries plugins/external_libraries
-# RUN colcon build
-
-
-# Version2 is FROM osrf/ros:humble-desktop to install px4-depencies and gazebo-deps,
-# which is very slow, since the downloading speed of gazebo server is only around 20KB/s.
-# Both two deps can be install by scripts in <PX4-ROOT>Tools/setup/ubuntu.sh
-# Here, we provide in docker/px4-setup to avoid the nuttx toolchain installation.
+CMD bash

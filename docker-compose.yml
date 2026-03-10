@@ -20,6 +20,7 @@ services:
       - ${HOME}/sim2sim:/home/qgc/ulgs/
       - /dev/input:/dev/input
     command: qgc
+    network_mode: bridge
     deploy:
       resources:
         limits:
@@ -54,6 +55,7 @@ services:
     command: tail -f /dev/null
     stdin_open: true
     tty: true
+    network_mode: bridge
     deploy:
       resources:
         limits:
@@ -81,6 +83,7 @@ services:
     command: tail -f /dev/null
     stdin_open: true
     tty: true
+    network_mode: bridge
     deploy:
       resources:
         limits:

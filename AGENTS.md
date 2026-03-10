@@ -1,4 +1,4 @@
-# LINT & FROMAT
+# LINT & FORMAT
 ## python codes
 
 Run

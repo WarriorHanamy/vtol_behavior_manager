@@ -181,7 +181,6 @@ class ActionPostProcessor:
     msg.timestamp = int(time.time() * 1e6)  # Convert to microseconds
 
     # Populate rate setpoints
-    # Populate rate setpoints
     msg.roll = float(rate_frd[0])  # Roll rate (FRD)
     msg.pitch = float(rate_frd[1])  # Pitch rate (FRD)
     msg.yaw = float(rate_frd[2])  # Yaw rate (FRD)

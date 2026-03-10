@@ -15,4 +15,5 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-docker exec -u 1000:1000 "$CONTAINER_NAME" bash -c "source /home/ros/.bashrc && source /opt/ros/*/setup.bash && if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi && exec \"\$@\"" _ "$@"
+docker exec -u 1000:1000 "$CONTAINER_NAME" \
+    bash -c "source /home/ros/.bashrc && source /opt/ros/*/setup.bash && if [ -f /home/ros/ros2_ws/install/setup.bash ]; then source /home/ros/ros2_ws/install/setup.bash; fi && exec \"\$@\"" _ "$@"
