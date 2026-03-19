@@ -1,4 +1,4 @@
-.PHONY: up down qgc ros2-service ros2-kill ros2-ps px4-service px4-kill px4-ps colcon-rebuild neural-ctrl px4-sim sync-msg-submodule
+.PHONY: up down qgc ros2-service ros2-kill ros2-ps px4-service px4-kill px4-ps colcon-rebuild neural-ctrl px4-sim sync-msg-submodule build
 
 # =============================================================================
 # Quick Start
@@ -31,6 +31,9 @@ ros2-ps:
 
 colcon-rebuild:
 	docker compose run --rm ros2 colcon build
+
+build:
+	docker compose run --rm ros2 bash -c "cp -r src/px4_msgs/msg/versioned/* src/px4_msgs/msg/ && source /opt/ros/humble/setup.bash && colcon build"
 
 neural-ctrl:
 	docker compose run --rm ros2 python3 src/neural_manager/neural_inference/neural_infer.py

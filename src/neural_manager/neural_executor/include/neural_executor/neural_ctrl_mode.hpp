@@ -7,7 +7,7 @@
 #include <px4_ros2/components/mode.hpp>
 #include <px4_ros2/control/setpoint_types/experimental/acc_rates.hpp>
 #include <px4_ros2/odometry/local_position.hpp>
-#include <px4_msgs/msg/vehicle_thrust_acc_setpoint.hpp>
+#include <px4_msgs/msg/vehicle_acc_rates_setpoint.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Core>
@@ -68,7 +68,7 @@ protected:
   }
 
 private:
-  px4_msgs::msg::VehicleThrustAccSetpoint _neural_acc_rates_ctrl;
+  px4_msgs::msg::VehicleAccRatesSetpoint _neural_acc_rates_ctrl;
   rclcpp::Time _neural_ctrl_timestamp;
 
   std::shared_ptr<px4_ros2::ManualControlInput> _manual_control_input;
@@ -76,13 +76,13 @@ private:
   double _activation_time;
   bool _has_neural_setpoint;
 
-  rclcpp::Subscription<px4_msgs::msg::VehicleThrustAccSetpoint>::SharedPtr _neural_acc_rates_ctrl_sub;
+  rclcpp::Subscription<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr _neural_acc_rates_ctrl_sub;
 
   void subscribeToNeuralControl()
   {
-    _neural_acc_rates_ctrl_sub = _node.create_subscription<px4_msgs::msg::VehicleThrustAccSetpoint>(
+    _neural_acc_rates_ctrl_sub = _node.create_subscription<px4_msgs::msg::VehicleAccRatesSetpoint>(
         "/neural/control", rclcpp::SensorDataQoS(),
-        [this](const px4_msgs::msg::VehicleThrustAccSetpoint::SharedPtr msg) {
+        [this](const px4_msgs::msg::VehicleAccRatesSetpoint::SharedPtr msg) {
           _neural_acc_rates_ctrl = *msg;
           _neural_ctrl_timestamp = _node.get_clock()->now();
           _has_neural_setpoint = true;
@@ -105,12 +105,12 @@ private:
     applyAccRatesSetpoint(_neural_acc_rates_ctrl);
   }
 
-  inline void applyAccRatesSetpoint(const px4_msgs::msg::VehicleThrustAccSetpoint& setpoint)
+  inline void applyAccRatesSetpoint(const px4_msgs::msg::VehicleAccRatesSetpoint& setpoint)
   {
     const Eigen::Vector3f rates_sp{
       setpoint.rates_sp[0],
       setpoint.rates_sp[1],
       setpoint.rates_sp[2]};
-    _acc_rates_setpoint->update(setpoint.thrust_acc_sp, rates_sp);
+    _acc_rates_setpoint->update(setpoint.thrust_axis_acc_sp, rates_sp);
   }
 };

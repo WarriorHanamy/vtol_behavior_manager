@@ -141,7 +141,7 @@ class ActionPostProcessor:
     msg.timestamp = int(time.time() * 1e6)
 
     thrust_acc = self._convert_thrust_to_acceleration(thrust_raw)
-    msg.thrust_axis_accp_sp = float(thrust_acc)
+    msg.thrust_axis_acc_sp = float(thrust_acc)
 
     msg.rates_sp[0] = float(rate_frd[0])
     msg.rates_sp[1] = float(rate_frd[1])

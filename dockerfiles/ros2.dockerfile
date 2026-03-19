@@ -57,14 +57,5 @@ RUN source /opt/ros/humble/setup.bash && colcon build
 
 ENV ROS_DISTRO=humble
 
-USER root
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt install -y software-properties-common && \
-    add-apt-repository ppa:maveonair/helix-editor && \
-    apt update && \
-    apt install -y helix && \
-    echo "alias vim='hx'" >> /root/.bashrc
-
-USER ros
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["tail", "-f", "/dev/null"]

@@ -139,7 +139,7 @@ class ControlPublisher:
     if ROS2_AVAILABLE and VehicleAccRatesSetpoint is not None:
       msg = VehicleAccRatesSetpoint()
       msg.timestamp = timestamp
-      msg.thrust_axis_accp_sp = float(acc_p_z)
+      msg.thrust_axis_acc_sp = float(acc_p_z)
       msg.rates_sp = [
         float(bodyrate[0]),
         float(bodyrate[1]),
