@@ -51,7 +51,6 @@ services:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ./src:/home/ros/ros2_ws/src
-      - ./scripts:/home/ros/ros2_ws/scripts
     command: tail -f /dev/null
     stdin_open: true
     tty: true

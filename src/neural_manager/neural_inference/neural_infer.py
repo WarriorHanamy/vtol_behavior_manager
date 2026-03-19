@@ -187,7 +187,7 @@ class NeuralControlNode(rclpy.node.Node):
       self._pipeline = None
 
 
-@hydra.main(version_base="1.2", config_path="conf", config_name="pos_ctrl_config")
+@hydra.main(version_base="1.2", config_path="config", config_name="pos_ctrl_config")
 def main(cfg: DictConfig) -> int:
   """主函数"""
   rclpy.init()

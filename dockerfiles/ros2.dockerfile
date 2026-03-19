@@ -22,7 +22,6 @@ RUN chown -R ros:ros /home/ros/ros2_ws
 
 # Copy project files
 COPY --chown=ros:ros src /home/ros/ros2_ws/src
-COPY --chown=ros:ros scripts /home/ros/ros2_ws/scripts
 
 USER ros
 WORKDIR /home/ros/ros2_ws
