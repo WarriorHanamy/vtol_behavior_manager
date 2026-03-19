@@ -1,4 +1,4 @@
-.PHONY: up down qgc ros2-service ros2-kill ros2-ps px4-service px4-kill px4-ps colcon-build neural-ctrl px4-sim sync-msg-submodule
+.PHONY: up down qgc ros2-service ros2-kill ros2-ps px4-service px4-kill px4-ps colcon-rebuild neural-ctrl px4-sim sync-msg-submodule
 
 # =============================================================================
 # Quick Start
@@ -29,11 +29,11 @@ ros2-kill: ros2-ps
 ros2-ps:
 	docker ps --filter "name=ros2" --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
 
-colcon-build:
-	docker compose run --rm ros2 bash -c "cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && source /opt/ros/humble/setup.bash && colcon build"
+colcon-rebuild:
+	docker compose run --rm ros2 colcon build
 
 neural-ctrl:
-	docker compose run --rm ros2 bash -c "source /opt/ros/humble/setup.bash && source install/setup.bash && python3 src/neural_manager/neural_inference/neural_infer.py"
+	docker compose run --rm ros2 python3 src/neural_manager/neural_inference/neural_infer.py
 
 # =============================================================================
 # PX4 Gazebo Simulator
@@ -49,7 +49,7 @@ px4-ps:
 	docker ps --filter "name=px4" --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
 
 px4-sim:
-	docker compose exec px4 bash -c "cd /root/PX4-Neupilot && make px4_sitl_default gz_x500_vtol"
+	docker compose exec px4 bash -c "cd /home/px4/PX4-Neupilot && HEADLESS=True make px4_sitl_default gz_x500"
 
 # =============================================================================
 # Submodule Sync

@@ -50,7 +50,6 @@ services:
     volumes:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
-    command: tail -f /dev/null
     stdin_open: true
     tty: true
     network_mode: bridge
