@@ -4,7 +4,7 @@ services:
   qgc:
     build:
       context: .
-      dockerfile: docker/qgc5.dockerfile
+      dockerfile: dockerfiles/qgc5.dockerfile
     image: qgc5-vtol:latest
 
     restart: no
@@ -32,7 +32,7 @@ services:
   ros2:
     build:
       context: .
-      dockerfile: docker/ros2.dockerfile
+      dockerfile: dockerfiles/ros2.dockerfile
       args:
         LATETST: "true"
     image: ros2-vtol:latest
@@ -50,7 +50,6 @@ services:
     volumes:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - ./src:/home/ros/ros2_ws/src
     command: tail -f /dev/null
     stdin_open: true
     tty: true
@@ -66,7 +65,7 @@ services:
   px4:
     build:
       context: .
-      dockerfile: docker/px4-gazebo.dockerfile
+      dockerfile: dockerfiles/px4-gazebo.dockerfile
     image: px4-gazebo-harmonic-vtol:v1
 
     restart: no

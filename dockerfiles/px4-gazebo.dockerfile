@@ -10,7 +10,36 @@ LABEL maintainer="WarriorHanamy <rongerch@outlook.com>"
 # Some QT-Apps/Gazebo don't not show controls without this
 ENV QT_X11_NO_MITSHM=1
 
-RUN --mount=type=cache,target=/var/cache/apt \
+RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y --quiet --no-install-recommends install \
+        ant \
+        binutils \
+        bc \
+        dirmngr \
+        dmidecode \
+        pkg-config \
+        libimage-exiftool-perl \
+        libxml2-utils \
+        mesa-utils \
+        protobuf-compiler \
+        x-window-system
+
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt update && apt install -y \
+    vim \
+    python3-pip python3-venv \
+    curl lsb-release gnupg wget \
+    sudo
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
  	&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
  	&& apt-get update \
@@ -37,46 +66,31 @@ RUN --mount=type=cache,target=/var/cache/apt \
  		protobuf-compiler \
  		x-window-system
 
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt update && apt install -y \
-    vim \
-    python3-pip python3-venv \
-    curl lsb-release gnupg wget
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y --quiet --no-install-recommends install \
+    libprotobuf-dev
 
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt update && apt install -y locales \
-    && locale-gen en_US.UTF-8 \
-    &&  locale-gen zh_CN.UTF-8 \
-    &&  update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+WORKDIR /home/px4
+ARG PX4_GIT_REF=main
+RUN git clone --recursive --branch "${PX4_GIT_REF}" --depth 1 \
+    https://github.com/WarriorHanamy/PX4-Neupilot.git
 
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt install -y software-properties-common \
-    && add-apt-repository universe \
-    && apt update \
-    && export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}') \
-    && curl -L -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb" \
-    && dpkg -i /tmp/ros2-apt-source.deb \
-    && rm /tmp/ros2-apt-source.deb \
-    && apt update
 
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt install -y ros-humble-ros-base ros-humble-ros-gzharmonic &&\
-    echo "source /opt/ros/humble/setup.bash" >> ${HOME}/.bashrc
+RUN useradd -m -s /bin/bash px4 && \
+    echo "px4 ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/px4 && \
+    chmod 0440 /etc/sudoers.d/px4 && \
+    chown -R px4:px4 /home/px4
 
-WORKDIR /root
-RUN git clone https://github.com/WarriorHanamy/PX4-Neupilot.git --recursive --depth 1
 
-WORKDIR /root/PX4-Neupilot
-RUN bash install-dds-agent.bash
+ENV GZ_DISTRO=harmonic
+ENV GIT_SUBMODULES_ARE_EVIL=1
 
-RUN make px4_sitl_default
-ENV PATH="/root/PX4-Neupilot/Tools:$PATH"
+USER px4
+WORKDIR /home/px4/PX4-Neupilot
 
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt install -y software-properties-common && \
-    add-apt-repository ppa:maveonair/helix-editor && \
-    apt update && \
-    apt install -y helix && \
-    echo "alias vim='hx'" >> /root/.bashrc
+#RUN make px4_sitl_default
+ENV PATH="/home/px4/PX4-Neupilot/Tools:$PATH"
 
 CMD bash
