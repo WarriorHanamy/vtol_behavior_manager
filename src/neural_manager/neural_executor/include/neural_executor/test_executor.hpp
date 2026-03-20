@@ -1,3 +1,14 @@
+/****************************************************************************
+ * Copyright (c) 2025 PX4 Development Team.
+ * SPDX-License-Identifier: BSD-3-Clause
+ ****************************************************************************/
+/**
+ * @file test_executor.hpp
+ * @brief Test executor using TestNeuralManualMode instead of NeuralCtrlMode
+ * @author steven cheng
+ * @date created on 2025.03.20
+ */
+
 #pragma once
 
 #include <px4_ros2/components/mode_executor.hpp>
@@ -8,7 +19,7 @@
 
 using namespace std::chrono_literals;
 
-class NeuralExecutor : public px4_ros2::ModeExecutorBase
+class TestExecutor : public px4_ros2::ModeExecutorBase
 {
   static constexpr uint16_t RC_NN_CMD_MASK = 1024;
   static constexpr uint8_t POSCTL_NAV_STATE = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
@@ -19,17 +30,17 @@ public:
   {
     TakingOff,
     Position,
-    NeuralCtrl,
+    NeuralManual,
     WaitingStill,
     Land,
     WaitUntilDisarmed,
   };
 
-  NeuralExecutor(px4_ros2::ModeBase & owned_mode, px4_ros2::ModeBase & neural_mode)
+  TestExecutor(px4_ros2::ModeBase & owned_mode, px4_ros2::ModeBase & neural_manual_mode)
   : ModeExecutorBase(
       Settings{Settings::Activation::ActivateOnlyWhenArmed},
       owned_mode),
-    _neural_mode(neural_mode),
+    _neural_manual_mode(neural_manual_mode),
     _context(std::make_unique<px4_ros2::Context>(node())),
     _vehicle_status(std::make_unique<px4_ros2::VehicleStatus>(*_context)),
     _manual_control_input(std::make_unique<px4_ros2::ManualControlInput>(*_context, true))
@@ -39,13 +50,13 @@ public:
 
   void onActivate() override
   {
-    RCLCPP_INFO(node().get_logger(), "NeuralExecutor: Starting mission");
+    RCLCPP_INFO(node().get_logger(), "TestExecutor: Starting mission");
     runState(State::TakingOff, px4_ros2::Result::Success);
   }
 
   void onDeactivate(DeactivateReason reason) override
   {
-    RCLCPP_WARN(node().get_logger(), "NeuralExecutor: Deactivated");
+    RCLCPP_WARN(node().get_logger(), "TestExecutor: Deactivated");
   }
 
   void runState(State state, px4_ros2::Result previous_result)
@@ -80,13 +91,13 @@ public:
         RCLCPP_INFO(node().get_logger(), "State: Position - waiting for RC trigger");
         break;
 
-      case State::NeuralCtrl:
-        RCLCPP_INFO(node().get_logger(), "State: NeuralCtrl");
-        scheduleMode(_neural_mode.id(), [this](px4_ros2::Result result) {
+      case State::NeuralManual:
+        RCLCPP_INFO(node().get_logger(), "State: NeuralManual");
+        scheduleMode(_neural_manual_mode.id(), [this](px4_ros2::Result result) {
           if (result == px4_ros2::Result::Success) {
-            RCLCPP_INFO(node().get_logger(), "NeuralCtrl succeeded - continuing in NeuralCtrl mode");
+            RCLCPP_INFO(node().get_logger(), "NeuralManual succeeded - continuing in NeuralManual mode");
           } else {
-            RCLCPP_WARN(node().get_logger(), "NeuralCtrl failed/interrupted, returning to Position");
+            RCLCPP_WARN(node().get_logger(), "NeuralManual failed/interrupted, returning to Position");
             runState(State::Position, px4_ros2::Result::ModeFailureOther);
           }
         });
@@ -126,7 +137,7 @@ public:
   }
 
 private:
-  px4_ros2::ModeBase & _neural_mode;
+  px4_ros2::ModeBase & _neural_manual_mode;
 
   std::unique_ptr<px4_ros2::Context> _context;
   std::unique_ptr<px4_ros2::VehicleStatus> _vehicle_status;
@@ -151,7 +162,7 @@ private:
     bool button_rising = button_pressed && !_button_pressed_last;
 
     if (aux1_rising || button_rising) {
-      runState(State::NeuralCtrl, px4_ros2::Result::Success);
+      runState(State::NeuralManual, px4_ros2::Result::Success);
     }
 
     _aux1_high_last = aux1_high;
