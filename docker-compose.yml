@@ -6,6 +6,9 @@ services:
       context: .
       dockerfile: dockerfiles/qgc5.dockerfile
     image: qgc5-vtol:latest
+    depends_on:
+      ros2:
+        condition: service_started
 
     restart: no
     privileged: true
@@ -52,6 +55,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
     stdin_open: true
     tty: true
+    command: bash
     network_mode: bridge
     deploy:
       resources:
@@ -74,7 +78,8 @@ services:
       dockerfile: dockerfiles/px4-gazebo.dockerfile
     image: px4-gazebo-harmonic-vtol:v1
     depends_on:
-      - px4-deps
+      ros2:
+        condition: service_started
 
     restart: no
     privileged: true
@@ -86,7 +91,7 @@ services:
     volumes:
       - ${HOME}/.Xauthority:/root/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
-    command: tail -f /dev/null
+    command: runsim.sh 2
     stdin_open: true
     tty: true
     network_mode: bridge

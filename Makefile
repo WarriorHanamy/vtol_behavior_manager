@@ -1,62 +1,13 @@
-.PHONY: up down qgc ros2-service ros2-kill ros2-ps px4-service px4-kill px4-ps colcon-rebuild neural-ctrl px4-sim sync-msg-submodule build
-
-# =============================================================================
-# Quick Start
-# =============================================================================
-
-up: px4-service ros2-service qgc
-
-down: ros2-kill px4-kill
-	docker compose down
-
-# =============================================================================
-# QGroundControl
-# =============================================================================
-
-qgc:
-	docker compose run --rm -d qgc
-
-# =============================================================================
-# ROS2 Workspace
-# =============================================================================
-
-ros2-service: ros2-kill
-	docker compose run --rm -d ros2
-
-ros2-kill: ros2-ps
-	docker ps --filter "name=ros2" -q | xargs -r docker kill
-
-ros2-ps:
-	docker ps --filter "name=ros2" --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
-
-colcon-rebuild:
-	docker compose run --rm ros2 colcon build
+.PHONY: build
 
 build:
 	docker compose run --rm ros2 bash -c "cp -r src/px4_msgs/msg/versioned/* src/px4_msgs/msg/ && source /opt/ros/humble/setup.bash && colcon build"
 
-neural-ctrl:
-	docker compose run --rm ros2 python3 src/neural_manager/neural_inference/neural_infer.py
-
-# =============================================================================
-# PX4 Gazebo Simulator
-# =============================================================================
-
-px4-service: px4-kill
-	docker compose run --rm -d px4
-
-px4-kill: px4-ps
-	docker ps --filter "name=px4" -q | xargs -r docker kill
-
-px4-ps:
-	docker ps --filter "name=px4" --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
-
-px4-sim:
-	docker compose exec px4 bash -c "cd /home/px4/PX4-Neupilot && HEADLESS=True make px4_sitl_default gz_x500"
-
 # =============================================================================
 # Submodule Sync
 # =============================================================================
+
+.PHONY: sync-msg-submodule
 
 REF_NEUPILOT_REMOTE ?= https://github.com/WarriorHanamy/PX4-Neupilot.git
 MSG_SUBMODULE_PATH := src/px4_msgs/msg
@@ -79,3 +30,22 @@ sync-msg-submodule:
 	cd $(CURDIR) && git config submodule.$(MSG_SUBMODULE_PATH).url "$$MSG_URL"; \
 	echo ">>> Submodule synced. Changes to commit:"; \
 	git status --short $(MSG_SUBMODULE_PATH) .gitmodules
+
+# =============================================================================
+# Simulation Environment (tmux + docker compose)
+# =============================================================================
+
+.PHONY: sim sim-kill
+
+TMUX_SESSION := vtol-sim
+
+sim: sim-kill
+	@which tmux >/dev/null || { echo "Error: tmux not installed"; exit 1; }
+	@echo ">>> Starting simulation session: $(TMUX_SESSION)"
+	tmux new-session -d -s $(TMUX_SESSION) -n sim -x 200 -y 50
+	tmux send-keys -t $(TMUX_SESSION) 'docker compose up -d px4 qgc && docker compose attach ros2; docker compose down; tmux kill-session -t $(TMUX_SESSION)' C-m
+	tmux attach -t $(TMUX_SESSION)
+
+sim-kill:
+	@echo ">>> Killing session: $(TMUX_SESSION)"
+	tmux kill-session -t $(TMUX_SESSION) 2>/dev/null || echo "Session not found or already dead"
