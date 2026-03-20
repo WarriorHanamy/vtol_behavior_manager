@@ -197,21 +197,25 @@ private:
 
   void handleRCInput(const px4_msgs::msg::ManualControlSetpoint::SharedPtr msg)
   {
-    // Only process if in Position mode
-    static bool button_pressed_last = false;
-
     if (_current_nav_state != POSCTL_NAV_STATE) {
       return;
     }
 
-    bool button_pressed_now = (msg->buttons == RC_NN_CMD_MASK);
+    static bool button_pressed_last = false;
+    static bool aux1_high_last = false;
 
-    if (button_pressed_now && !button_pressed_last) {
-      // Rising edge detected - trigger Neural!
+    bool button_pressed_now = (msg->buttons == RC_NN_CMD_MASK);
+    bool aux1_high_now = !std::isnan(msg->aux1) && (msg->aux1 > 0.5f);
+
+    bool button_rising = (button_pressed_now && !button_pressed_last);
+    bool aux1_rising = (aux1_high_now && !aux1_high_last);
+
+    if (button_rising || aux1_rising) {
       runState(State::NeuralCtrl, px4_ros2::Result::Success);
     }
 
-    button_pressed_last = button_pressed_now;  
+    button_pressed_last = button_pressed_now;
+    aux1_high_last = aux1_high_now;
   }
 
   void handlePositionSwitchResult(px4_ros2::Result result)

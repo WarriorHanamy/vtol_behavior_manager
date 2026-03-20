@@ -23,7 +23,7 @@ services:
       - ${HOME}/sim2sim:/home/qgc/ulgs/
       - /dev/input:/dev/input
     command: qgc
-    network_mode: bridge
+    network_mode: host
     deploy:
       resources:
         limits:
@@ -56,7 +56,7 @@ services:
     stdin_open: true
     tty: true
     command: bash
-    network_mode: bridge
+    network_mode: host
     deploy:
       resources:
         limits:
@@ -94,7 +94,7 @@ services:
     command: runsim.sh 2
     stdin_open: true
     tty: true
-    network_mode: bridge
+    network_mode: host
     deploy:
       resources:
         limits:
