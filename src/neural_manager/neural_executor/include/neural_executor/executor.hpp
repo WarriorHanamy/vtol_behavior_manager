@@ -105,11 +105,7 @@ public:
         scheduleMode(
           _neural_mode.id(), [this](px4_ros2::Result result) {
             if (result == px4_ros2::Result::Success) {
-              RCLCPP_INFO(node().get_logger(), "NeuralCtrl succeeded - target reached, returning to Position mode to stop");
-              scheduleMode(px4_ros2::ModeBase::kModeIDPosctl, [this](px4_ros2::Result pos_result) {
-                handlePositionSwitchResult(pos_result);
-              });
-              runState(State::WaitingStill, px4_ros2::Result::Success);
+              RCLCPP_INFO(node().get_logger(), "NeuralCtrl succeeded - continuing in NeuralCtrl mode");
             } else {
               RCLCPP_WARN(node().get_logger(), "NeuralCtrl failed/interrupted, returning to Position");
               runState(State::Position, px4_ros2::Result::Success);

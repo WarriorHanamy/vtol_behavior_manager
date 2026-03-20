@@ -25,11 +25,20 @@ public:
   {
     _activation_time = {0};
     _has_neural_setpoint = false;
+    _startup_position_set = false;
 
     _acc_rates_setpoint = std::make_shared<px4_ros2::AccRatesSetpointType>(*this);
     RCLCPP_INFO(_node.get_logger(), "Neural: Thrust-axis Acceleration + Body Rates (AccRatesSetpoint)");
 
     _manual_control_input = std::make_shared<px4_ros2::ManualControlInput>(*this);
+    _odometry_position = std::make_shared<px4_ros2::OdometryLocalPosition>(*this);
+
+    node().declare_parameter("geofence_xy_limit", 5.0f);
+    node().declare_parameter("geofence_z_limit", 0.5f);
+    node().declare_parameter("neural_mode_timeout", 0.1f);
+    _geofence_xy_limit = node().get_parameter("geofence_xy_limit").as_double();
+    _geofence_z_limit = node().get_parameter("geofence_z_limit").as_double();
+    _neural_mode_timeout = node().get_parameter("neural_mode_timeout").as_double();
 
     subscribeToNeuralControl();
   }
@@ -46,6 +55,7 @@ protected:
   {
     _activation_time = _node.get_clock()->now().seconds();
     _has_neural_setpoint = false;
+    _startup_position_set = false;
   }
 
   void onDeactivate() override
@@ -64,6 +74,11 @@ protected:
       return;
     }
 
+    if (checkGeofenceExceeded()) {
+      completed(px4_ros2::Result::ModeFailureOther);
+      return;
+    }
+
     processNeuralSetpoint();
   }
 
@@ -73,11 +88,46 @@ private:
 
   std::shared_ptr<px4_ros2::ManualControlInput> _manual_control_input;
   std::shared_ptr<px4_ros2::AccRatesSetpointType> _acc_rates_setpoint;
+  std::shared_ptr<px4_ros2::OdometryLocalPosition> _odometry_position;
+
   double _activation_time;
   bool _has_neural_setpoint;
 
+  Eigen::Vector3f _startup_position{0, 0, 0};
+  bool _startup_position_set{false};
+  float _geofence_xy_limit{5.0f};
+  float _geofence_z_limit{0.5f};
+  float _neural_mode_timeout{0.1f};
+
   rclcpp::Subscription<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr _neural_acc_rates_ctrl_sub;
 
+  bool checkGeofenceExceeded()
+  {
+    if (!_odometry_position->positionXYValid() || !_odometry_position->positionZValid()) {
+      return false;
+    }
+
+    if (!_startup_position_set) {
+      _startup_position = _odometry_position->positionNed();
+      _startup_position_set = true;
+      RCLCPP_INFO(_node.get_logger(), "Geofence center set: (%.2f, %.2f, %.2f)",
+                  _startup_position.x(), _startup_position.y(), _startup_position.z());
+      return false;
+    }
+
+    auto pos = _odometry_position->positionNed();
+    float xy_dist = (pos.head<2>() - _startup_position.head<2>()).norm();
+    float z_dist = std::abs(pos.z() - _startup_position.z());
+
+    if (xy_dist > _geofence_xy_limit || z_dist > _geofence_z_limit) {
+      RCLCPP_WARN(_node.get_logger(), "Geofence exceeded: XY=%.2fm/%.1fm, Z=%.2fm/%.1fm",
+                  xy_dist, _geofence_xy_limit, z_dist, _geofence_z_limit);
+      return true;
+    }
+    return false;
+  }
+
+  // TODO, the naming is not clear.
   void subscribeToNeuralControl()
   {
     _neural_acc_rates_ctrl_sub = _node.create_subscription<px4_msgs::msg::VehicleAccRatesSetpoint>(
@@ -101,10 +151,10 @@ private:
     RCLCPP_WARN_THROTTLE(_node.get_logger(), *_node.get_clock(), 1000,
                          "Neural: Applying setpoint...");
 
-    _neural_acc_rates_ctrl.rates_sp[2] = 0.0f;
     applyAccRatesSetpoint(_neural_acc_rates_ctrl);
   }
 
+  // TODO, I'm not quite clear this if should do post-processing here.
   inline void applyAccRatesSetpoint(const px4_msgs::msg::VehicleAccRatesSetpoint& setpoint)
   {
     const Eigen::Vector3f rates_sp{

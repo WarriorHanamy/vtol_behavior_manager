@@ -1,7 +1,14 @@
 .PHONY: build
 
+TMP_SRC := /tmp/vtol-interface-src
+
 build:
-	docker compose run --rm ros2 bash -c "cp -r src/px4_msgs/msg/versioned/* src/px4_msgs/msg/ && source /opt/ros/humble/setup.bash && colcon build"
+	@echo ">>> Copying src to $(TMP_SRC)..."
+	@rm -rf $(TMP_SRC)
+	@cp -r src $(TMP_SRC)
+	docker compose run --rm \
+		-v $(TMP_SRC):/home/ros/ros2_ws/src \
+		ros2 bash -c "cp -r src/px4_msgs/msg/versioned/* src/px4_msgs/msg/ && source /opt/ros/humble/setup.bash && colcon build"
 
 # =============================================================================
 # Submodule Sync
