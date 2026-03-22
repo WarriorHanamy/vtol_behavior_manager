@@ -141,6 +141,7 @@ private:
 
   void handleRCInput()
   {
+    if (!_vehicle_status->lastValid()) return;
     if (_vehicle_status->navState() != POSCTL_NAV_STATE) return;
     if (!_manual_control_input->isValid()) return;
 
