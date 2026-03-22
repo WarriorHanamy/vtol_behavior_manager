@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 """
-Neural Executor Launch File
+Test Neural Executor Launch File
 
-This launch file starts the Neural Executor system with:
-- Neural Executor Node with integrated RC triggering
+This launch file starts the Test Neural Executor system with:
+- Test Neural Executor Node using TestNeuralManualMode
 - Configuration for waypoint-based trajectory control
 - Comprehensive failsafe mechanisms
 """
@@ -35,8 +35,8 @@ def generate_launch_description():
 
   executor_node = Node(
     package="neural_executor",
-    executable="neural_executor_node",
-    name="neural_executor_node",
+    executable="test_neural_executor_node",
+    name="test_neural_executor_node",
     output="screen",
     parameters=[common_params],
     emulate_tty=True,
