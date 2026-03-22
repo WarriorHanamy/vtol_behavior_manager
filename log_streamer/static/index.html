@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Services Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Neural Services Dashboard</h1>
+            <span id="connection-status" class="status-badge disconnected">Disconnected</span>
+        </header>
+
+        <section class="services-grid">
+            <div class="service-card" id="card-neural_executor">
+                <h3>Neural Executor</h3>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Loading...</span>
+                </div>
+            </div>
+            <div class="service-card" id="card-neural_infer">
+                <h3>Neural Infer</h3>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Loading...</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="logs-section">
+            <div class="logs-header">
+                <div class="tabs">
+                    <button class="tab active" data-service="merged">All Services</button>
+                    <button class="tab" data-service="neural_executor">Executor</button>
+                    <button class="tab" data-service="neural_infer">Infer</button>
+                </div>
+                <div class="controls">
+                    <label>
+                        <input type="checkbox" id="auto-scroll" checked>
+                        Auto-scroll
+                    </label>
+                    <button id="clear-logs">Clear</button>
+                </div>
+            </div>
+            <div id="log-container" class="log-container">
+                <div class="log-placeholder">Connecting to log stream...</div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // State
+        let eventSource = null;
+        let currentService = 'merged';
+        let autoScroll = true;
+        let logLines = 0;
+        const MAX_LOG_LINES = 1000;
+
+        // DOM elements
+        const logContainer = document.getElementById('log-container');
+        const connectionStatus = document.getElementById('connection-status');
+        const autoScrollCheckbox = document.getElementById('auto-scroll');
+        const clearLogsBtn = document.getElementById('clear-logs');
+        const tabs = document.querySelectorAll('.tab');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStatus();
+            setInterval(fetchStatus, 3000);
+            connectLogStream('merged');
+
+            // Tab switching
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentService = tab.dataset.service;
+                    connectLogStream(currentService);
+                });
+            });
+
+            // Auto-scroll toggle
+            autoScrollCheckbox.addEventListener('change', (e) => {
+                autoScroll = e.target.checked;
+            });
+
+            // Clear logs
+            clearLogsBtn.addEventListener('click', () => {
+                logContainer.innerHTML = '';
+                logLines = 0;
+            });
+        });
+
+        // Fetch service status
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                updateServiceCards(data);
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        }
+
+        // Update service status cards
+        function updateServiceCards(data) {
+            Object.entries(data).forEach(([service, info]) => {
+                const card = document.getElementById(`card-${service}`);
+                if (!card) return;
+
+                const dot = card.querySelector('.status-dot');
+                const text = card.querySelector('.status-text');
+
+                const status = info.status;
+                text.textContent = status;
+
+                dot.className = 'status-dot';
+                if (status === 'active') {
+                    dot.classList.add('active');
+                } else if (status === 'inactive' || status === 'failed') {
+                    dot.classList.add('inactive');
+                } else {
+                    dot.classList.add('unknown');
+                }
+            });
+        }
+
+        // Connect to SSE log stream
+        function connectLogStream(service) {
+            // Close existing connection
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            // Clear logs on service switch
+            logContainer.innerHTML = '<div class="log-placeholder">Connecting to log stream...</div>';
+            logLines = 0;
+
+            const endpoint = service === 'merged' ? '/logs/merged' : `/logs/${service}`;
+            eventSource = new EventSource(endpoint);
+
+            eventSource.onopen = () => {
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'status-badge connected';
+                logContainer.innerHTML = '';
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const log = JSON.parse(event.data);
+                    appendLog(log);
+                } catch (e) {
+                    // Raw text fallback
+                    appendRawLog(event.data);
+                }
+            };
+
+            eventSource.onerror = () => {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'status-badge disconnected';
+                // Attempt reconnect after 3 seconds
+                setTimeout(() => {
+                    if (eventSource.readyState === EventSource.CLOSED) {
+                        connectLogStream(currentService);
+                    }
+                }, 3000);
+            };
+        }
+
+        // Append formatted log entry
+        function appendLog(log) {
+            // Trim old logs if exceeding max
+            if (logLines >= MAX_LOG_LINES) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            // Service badge
+            if (log.service) {
+                const badge = document.createElement('span');
+                badge.className = `log-service ${log.service}`;
+                badge.textContent = log.service.replace('neural_', '');
+                entry.appendChild(badge);
+            }
+
+            // Timestamp
+            if (log.__REALTIME_TIMESTAMP) {
+                const timestamp = document.createElement('span');
+                timestamp.className = 'log-timestamp';
+                const us = parseInt(log.__REALTIME_TIMESTAMP);
+                const date = new Date(us / 1000);
+                timestamp.textContent = date.toLocaleTimeString();
+                entry.appendChild(timestamp);
+            }
+
+            // Message
+            const message = document.createElement('span');
+            message.className = 'log-message';
+            message.textContent = log.MESSAGE || log.message || '';
+            entry.appendChild(message);
+
+            logContainer.appendChild(entry);
+            logLines++;
+
+            if (autoScroll) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+
+        // Append raw log (fallback)
+        function appendRawLog(text) {
+            if (logLines >= MAX_LOG_LINES) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = text;
+            logContainer.appendChild(entry);
+            logLines++;
+
+            if (autoScroll) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+    </script>
+</body>
+</html>

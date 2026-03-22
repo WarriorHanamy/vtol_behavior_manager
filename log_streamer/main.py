@@ -3,11 +3,18 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Log Streamer", version="0.1.0")
+
+# Mount static files
+STATIC_DIR = Path(__file__).parent / "static"
+if STATIC_DIR.exists():
+  app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 async def stream_journalctl(service_name: str) -> AsyncGenerator[str, None]:
@@ -67,6 +74,15 @@ async def get_service_status(service_name: str) -> str:
 def health():
   """Health check endpoint."""
   return {"status": "ok"}
+
+
+@app.get("/")
+def index():
+  """Serve dashboard UI."""
+  index_path = STATIC_DIR / "index.html"
+  if index_path.exists():
+    return FileResponse(index_path)
+  return {"error": "Dashboard not found"}
 
 
 @app.get("/logs/neural_executor")
