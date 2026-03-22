@@ -39,32 +39,45 @@ sync-msg-submodule:
 	git status --short $(MSG_SUBMODULE_PATH) .gitmodules
 
 # =============================================================================
-# Simulation Environment (tmux + docker compose)
+# Simulation Environment (systemd user service)
 # =============================================================================
 
-.PHONY: sim sim-kill
+.PHONY: sim sim-kill sim-status sim-attach
 
-TMUX_SESSION := vtol-sim
-
-sim: sim-kill
+# Legacy tmux-based sim (kept for reference)
+sim-legacy: sim-kill
 	@which tmux >/dev/null || { echo "Error: tmux not installed"; exit 1; }
 	@echo ">>> Starting simulation session: $(TMUX_SESSION)"
 	tmux new-session -d -s $(TMUX_SESSION) -n sim -x 200 -y 50
 	tmux send-keys -t $(TMUX_SESSION) 'docker compose up -d px4 qgc && docker compose attach ros2; docker compose down; tmux kill-session -t $(TMUX_SESSION)' C-m
 	tmux attach -t $(TMUX_SESSION)
 
+# New systemd-based sim session
+sim:
+	@echo ">>> Starting simulation session via systemd..."
+	@systemctl --user start sim-session.service
+	@echo ">>> Session started. Use 'make sim-attach' to attach to tmux."
+	@echo ">>> Or use 'make sim-status' to check status."
+
 sim-kill:
-	@echo ">>> Killing session: $(TMUX_SESSION)"
-	tmux kill-session -t $(TMUX_SESSION) 2>/dev/null || echo "Session not found or already dead"
+	@echo ">>> Stopping simulation session..."
+	@systemctl --user stop sim-session.service 2>/dev/null || true
+	@tmux kill-session -t vtol-sim 2>/dev/null || echo "Session not found or already dead"
+
+sim-status:
+	@systemctl --user status sim-session.service --no-pager
+
+sim-attach:
+	@tmux attach -t vtol-sim 2>/dev/null || echo "Session not running. Use 'make sim' first."
 
 # =============================================================================
-# Neural Services Management (systemd user services)
+# Neural Services Management (group-based)
 # =============================================================================
 
-.PHONY: install neural-start neural-stop neural-status logs logs-web
+.PHONY: install neural-start neural-stop neural-status logs logs-web neural test
 
 install:
-	@echo ">>> Installing neural services (neural_executor, neural_infer)..."
+	@echo ">>> Installing neural services..."
 	@if [ "$(shell id -u)" -eq 0 ]; then \
 		echo "Error: This target should NOT be run as root"; \
 		echo "User services must be installed for the current user"; \
@@ -72,40 +85,40 @@ install:
 	fi
 	@./install-neural-services.sh
 
+# Start Group A (neural_executor + neural_infer)
+neural:
+	@echo ">>> Switching to Neural Group A..."
+	@systemctl --user isolate neural.target
+
+# Start Group B (test_executor with joystick)
+test:
+	@echo ">>> Switching to Test Group B..."
+	@systemctl --user isolate test.target
+
+# Legacy targets (kept for compatibility)
 neural-start:
-	@echo ">>> Checking if ros2 container is running (required for neural services)..."
-	@if ! docker ps --filter "name=ros2" --format "{{.Names}}" | grep -q .; then \
-		echo "Error: ros2 container not found"; \
-		echo ""; \
-		echo "neural services require the ros2 container to be running."; \
-		echo "Please run 'make sim' first to start the simulation environment."; \
-		echo ""; \
-		echo "Usage:"; \
-		echo "  1. Run 'make sim' to start simulation (creates ros2 container)"; \
-		echo "  2. Then run 'make neural-start' to start neural services"; \
-		exit 1; \
-	fi
-	@echo ">>> ros2 container found, starting neural services..."
-	@systemctl --user enable neural_executor.service neural_infer.service
-	@systemctl --user start neural_executor.service neural_infer.service || true
-	@echo ">>> Neural services started successfully"
+	@echo ">>> Starting neural services (Group A)..."
+	@systemctl --user isolate neural.target
 
 neural-stop:
 	@echo ">>> Stopping neural services..."
-	@systemctl --user stop neural_executor.service neural_infer.service || true
-	@echo ">>> Neural services stopped"
+	@systemctl --user stop neural.target test.target 2>/dev/null || true
 
 neural-status:
-	@echo ">>> Checking neural services status..."
+	@echo ">>> Checking service status..."
 	@echo ""
-	@systemctl --user status neural_executor.service --no-pager || true
+	@echo "=== Sim Session ==="
+	@systemctl --user status sim-session.service --no-pager || true
 	@echo ""
-	@systemctl --user status neural_infer.service --no-pager || true
+	@echo "=== Neural Target (Group A) ==="
+	@systemctl --user status neural.target --no-pager || true
+	@echo ""
+	@echo "=== Test Target (Group B) ==="
+	@systemctl --user status test.target --no-pager || true
 
 logs:
-	@echo ">>> Streaming neural services logs (press Ctrl+C to exit)..."
-	@echo ""
-	@journalctl --user -u neural_executor.service -u neural_infer.service -f
+	@echo ">>> Streaming all service logs (press Ctrl+C to exit)..."
+	@journalctl --user -u sim-session.service -u neural_executor.service -u neural_infer.service -u test_executor.service -f
 
 logs-web:
 	@echo ">>> Log streamer web endpoints (requires log_streamer service to be running):"

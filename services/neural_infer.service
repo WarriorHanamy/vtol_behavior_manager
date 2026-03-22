@@ -1,8 +1,9 @@
 [Unit]
 Description=Neural Inference Service (runs inside ros2 container)
-After=network-online.target
-Wants=network-online.target
-Requires=docker.service
+PartOf=sim-session.service
+After=sim-session.service neural_executor.service
+Wants=neural.target
+Before=neural.target
 
 [Service]
 Type=simple

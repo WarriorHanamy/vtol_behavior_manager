@@ -1,8 +1,9 @@
 [Unit]
 Description=Test Executor Service (runs inside ros2 container)
-After=network-online.target
-Wants=network-online.target
-Requires=docker.service
+PartOf=sim-session.service
+After=sim-session.service
+Wants=test.target
+Before=test.target
 
 [Service]
 Type=simple

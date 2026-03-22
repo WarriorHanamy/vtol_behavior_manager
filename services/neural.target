@@ -1,0 +1,6 @@
+[Unit]
+Description=Neural Services Group A (neural_executor + neural_infer)
+Conflicts=test.target
+
+[Install]
+WantedBy=sim-session.service

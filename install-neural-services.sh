@@ -66,7 +66,15 @@ echo "Target: ${USER_SYSTEMD_DIR}"
 echo ""
 
 # Install services
-SERVICES=("neural_executor.service" "neural_infer.service" "test_executor.service")
+# Order matters: targets before services, sim-session first
+SERVICES=(
+    "sim-session.service"
+    "neural.target"
+    "test.target"
+    "neural_executor.service"
+    "neural_infer.service"
+    "test_executor.service"
+)
 FAILED=()
 
 for service in "${SERVICES[@]}"; do
@@ -95,18 +103,23 @@ if [ ${#FAILED[@]} -eq 0 ]; then
     echo "All services installed successfully!"
     echo "==================================================${NC}"
     echo ""
-    echo "To enable and start services:"
-    echo "  systemctl --user enable neural_executor.service"
-    echo "  systemctl --user start neural_executor.service"
-    echo "  systemctl --user enable neural_infer.service"
-    echo "  systemctl --user start neural_infer.service"
-    echo "  systemctl --user enable test_executor.service"
-    echo "  systemctl --user start test_executor.service"
+    echo "Architecture:"
+    echo "  sim-session.service  (main service, controls docker compose)"
+    echo "  ├── neural.target    (Group A: neural_executor + neural_infer)"
+    echo "  └── test.target      (Group B: test_executor with joystick)"
     echo ""
-    echo "To check service status:"
-    echo "  systemctl --user status neural_executor.service"
-    echo "  systemctl --user status neural_infer.service"
-    echo "  systemctl --user status test_executor.service"
+    echo "Quick Start:"
+    echo "  systemctl --user start sim-session.service    # Start sim + Group A (default)"
+    echo "  systemctl --user stop sim-session.service     # Stop everything"
+    echo ""
+    echo "Switch Groups (mutually exclusive):"
+    echo "  systemctl --user isolate neural.target        # Switch to Group A"
+    echo "  systemctl --user isolate test.target          # Switch to Group B"
+    echo ""
+    echo "Check status:"
+    echo "  systemctl --user status sim-session.service"
+    echo "  systemctl --user status neural.target"
+    echo "  systemctl --user status test.target"
     exit 0
 else
     echo -e "${RED}=================================================="
