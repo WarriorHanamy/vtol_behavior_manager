@@ -27,9 +27,13 @@ exclude = ["src/px4_msgs", "src/px4-ros2-interface-lib"]
 select = ["E", "F", "I", "UP"]
 ignore = ["E402", "F841", "F401"]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 
 [project.optional-dependencies]
 dev = [
   "ruff==0.14.0",
-  "pytest"
+  "pytest",
+  "pytest-asyncio"
 ]

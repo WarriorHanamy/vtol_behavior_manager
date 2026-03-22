@@ -17,6 +17,7 @@ Isaac Position Control Neural Network Inference Node for PX4 (Refactored)
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 import hydra
@@ -27,6 +28,7 @@ from control.action_post_processor import ActionPostProcessor
 from inference.actors import GRUPolicyActor, MLPPolicyActor
 from inference.history_buffer import ObservationHistoryBuffer
 from omegaconf.omegaconf import DictConfig, OmegaConf
+from readiness_checker import check_executor_ready
 
 
 class NeuralControlNode(rclpy.node.Node):
@@ -187,6 +189,25 @@ def main(cfg: DictConfig) -> int:
   rclpy.init()
 
   try:
+    # Wait for neural_executor to be ready before starting neural_infer
+    print("🔍 Checking neural_executor readiness...")
+    max_retries = 60  # Max 60 seconds (1 second per retry)
+    retry_interval = 1.0
+
+    for retry in range(max_retries):
+      if check_executor_ready():
+        print("✅ neural_executor is ready. Starting neural_infer...")
+        break
+      else:
+        print(f"⏳ neural_executor not ready yet. Retrying ({retry + 1}/{max_retries})...")
+        time.sleep(retry_interval)
+    else:
+      print("❌ Timeout: neural_executor did not become ready within 60 seconds.")
+      print("Please ensure neural_executor service is running properly.")
+      rclpy.shutdown()
+      return 1
+
+    # neural_executor is ready, proceed with neural_infer initialization
     node = NeuralControlNode(cfg)
     if node._pipeline.initialize():
       rclpy.spin(node)
