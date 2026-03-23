@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=forking
 WorkingDirectory=/home/rec/server/vtol-interface
+Environment="DISPLAY=:1"
 
 ExecStart=/usr/bin/tmux new-session -d -s vtol-sim -x 200 -y 50 \
   'docker compose up px4 qgc && docker compose attach ros2; docker compose down; tmux kill-session -t vtol-sim'

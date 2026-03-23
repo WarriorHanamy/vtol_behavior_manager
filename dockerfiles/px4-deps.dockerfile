@@ -6,10 +6,12 @@ FROM px4io/px4-dev-base-jammy:2024-05-18
 
 LABEL maintainer="WarriorHanamy <rongerch@outlook.com>"
 
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+
 ENV QT_X11_NO_MITSHM=1
 
-RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list
+RUN sed -i "s@archive.ubuntu.com@${APT_MIRROR}@g" /etc/apt/sources.list && \
+    sed -i "s@security.ubuntu.com@${APT_MIRROR}@g" /etc/apt/sources.list
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \

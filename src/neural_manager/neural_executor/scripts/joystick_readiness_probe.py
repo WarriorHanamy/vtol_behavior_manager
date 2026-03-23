@@ -18,11 +18,13 @@ Exit codes:
 """
 
 import argparse
+import sys
+
 import rclpy
 from rclpy.node import Node
-from px4_msgs.msg import ManualControlSetpoint
 from std_msgs.msg import Header
-import sys
+
+from px4_msgs.msg import ManualControlSetpoint
 
 
 class JoystickReadinessProbe(Node):

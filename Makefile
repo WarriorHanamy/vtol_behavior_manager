@@ -54,6 +54,8 @@ sim-legacy: sim-kill
 
 # New systemd-based sim session
 sim:
+	@echo ">>> Granting X11 access to docker..."
+	@xhost +local:docker 2>/dev/null || true
 	@echo ">>> Starting simulation session via systemd..."
 	@systemctl --user start sim-session.service
 	@echo ">>> Waiting for ros2 container to be ready..."

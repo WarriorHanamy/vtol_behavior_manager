@@ -1,10 +1,23 @@
 
 services:
+  # QGroundControl Dependencies Base Image
+  qgc-deps:
+    build:
+      context: .
+      dockerfile: dockerfiles/qgc-deps.dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}
+    image: qgc-deps:jammy
+
   # QGroundControl - Ground Control Station
   qgc:
     build:
       context: .
       dockerfile: dockerfiles/qgc5.dockerfile
+      additional_contexts:
+        qgc_deps: service:qgc-deps
+      args:
+        QGC_VERSION: ${QGC_VERSION:-5.0.8}
     image: qgc5-vtol:latest
     depends_on:
       ros2:
@@ -69,6 +82,8 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/px4-deps.dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}
     image: px4-deps:jammy-harmonic
 
   # PX4 Gazebo Simulator
@@ -76,6 +91,8 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/px4-gazebo.dockerfile
+      additional_contexts:
+        px4_deps: service:px4-deps
     image: px4-gazebo-harmonic-vtol:v1
     depends_on:
       ros2:

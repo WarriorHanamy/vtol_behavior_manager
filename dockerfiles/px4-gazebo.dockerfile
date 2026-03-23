@@ -2,7 +2,7 @@
 #
 # PX4 Gazebo 8 (Harmonic) - PX4 source and build layer
 #
-FROM px4-deps:jammy-harmonic
+FROM px4_deps
 
 LABEL maintainer="WarriorHanamy <rongerch@outlook.com>"
 
