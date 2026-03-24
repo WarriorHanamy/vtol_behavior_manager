@@ -12,275 +12,263 @@ implementing coordinate transformations and sensor data processing.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
+from px4_msgs.msg import TrajectorySetpoint, VehicleOdometry
+
 from .feature_provider_base import FeatureProviderBase
+from .protocols import InferenceNodeProtocol
 
 
 class VtolFeatureProvider(FeatureProviderBase):
+  """
+  Platform-specific VTOL feature provider.
+
+  This provider implements feature computation for VTOL vehicles with
+  coordinate transformations from PX4 NED frame to neural network FLU frame.
+
+  Sensor Data Buffers:
+  - _position_ned: Vehicle position in NED frame [N, E, D] (meters)
+  - _velocity_ned: Vehicle velocity in NED frame [N, E, D] (m/s)
+  - _quat: Vehicle orientation quaternion [w, x, y, z] (Hamilton)
+  - _ang_vel_frd: Angular velocity in FRD frame [roll, pitch, yaw] (rad/s)
+  - _target_pos_ned: Target position in NED frame [N, E, D] (meters)
+  - _last_action: Buffered action vector [thrust, roll_rate, pitch_rate, yaw_rate]
+
+  Constants:
+  - GRAVITY_ACCEL: Standard gravity acceleration in m/s^2
+  """
+
+  GRAVITY_ACCEL: float = 9.81
+
+  def __init__(
+    self,
+    metadata_path: Path | str,
+    node: InferenceNodeProtocol | None = None,
+    odometry_topic: str | None = None,
+    target_topic: str | None = None,
+  ):
     """
-    Platform-specific VTOL feature provider.
+    Initialize the VTOL feature provider.
 
-    This provider implements feature computation for VTOL vehicles with
-    coordinate transformations from PX4 NED frame to neural network FLU frame.
-
-    Sensor Data Buffers:
-    - _position_ned: Vehicle position in NED frame [N, E, D] (meters)
-    - _velocity_ned: Vehicle velocity in NED frame [N, E, D] (m/s)
-    - _quat: Vehicle orientation quaternion [w, x, y, z] (Hamilton)
-    - _ang_vel_frd: Angular velocity in FRD frame [roll, pitch, yaw] (rad/s)
-    - _target_pos_ned: Target position in NED frame [N, E, D] (meters)
-    - _last_action: Buffered action vector [thrust, roll_rate, pitch_rate, yaw_rate]
-
-    Constants:
-    - GRAVITY_ACCEL: Standard gravity acceleration in m/s^2
+    Args:
+        metadata_path: Path to observation_metadata.yaml file
+        node: Optional inference node for subscription and inference trigger
+        odometry_topic: Optional ROS2 topic for vehicle odometry
+        target_topic: Optional ROS2 topic for target setpoint
     """
+    self._position_ned: np.ndarray = np.zeros(3, dtype=np.float32)
+    self._velocity_ned: np.ndarray = np.zeros(3, dtype=np.float32)
+    self._quat: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    self._ang_vel_frd: np.ndarray = np.zeros(3, dtype=np.float32)
+    self._target_pos_ned: np.ndarray = np.zeros(3, dtype=np.float32)
+    self._last_action: np.ndarray = np.zeros(4, dtype=np.float32)
 
-    GRAVITY_ACCEL: float = 9.81
+    self._node: InferenceNodeProtocol | None = node
+    self._odom_sub = None
+    self._target_sub = None
 
-    def __init__(self, metadata_path: Path | str):
-        """
-        Initialize the VTOL feature provider.
+    super().__init__(metadata_path)
 
-        Args:
-            metadata_path: Path to observation_metadata.yaml file
-        """
-        # Initialize sensor data buffers before calling super().__init__()
-        # This is necessary because super().__init__() calls _validate_implementations()
-        # which in turn calls the get_{feature_name}() methods that depend on these attributes
-        self._position_ned: np.ndarray | None = None
-        self._velocity_ned: np.ndarray | None = None
-        self._quat: np.ndarray | None = None
-        self._ang_vel_frd: np.ndarray | None = None
-        self._target_pos_ned: np.ndarray | None = None
-        self._last_action: np.ndarray | None = None
+    if node is not None:
+      if odometry_topic:
+        self._odom_sub = node.create_subscription(
+          VehicleOdometry,
+          odometry_topic,
+          self._on_odometry,
+          10,
+        )
+      if target_topic:
+        self._target_sub = node.create_subscription(
+          TrajectorySetpoint,
+          target_topic,
+          self._on_target,
+          10,
+        )
 
-        # Now call parent class __init__ which will validate implementations
-        super().__init__(metadata_path)
+  def _on_odometry(self, msg: VehicleOdometry) -> None:
+    """
+    Handle odometry message and trigger inference.
 
-    # =========================================================================
-    # Sensor Update Methods
-    # =========================================================================
+    Args:
+        msg: VehicleOdometry message from PX4
+    """
+    position = np.array([msg.position[0], msg.position[1], msg.position[2]], dtype=np.float32)
+    velocity = np.array([msg.velocity[0], msg.velocity[1], msg.velocity[2]], dtype=np.float32)
+    quat = np.array([msg.q[0], msg.q[1], msg.q[2], msg.q[3]], dtype=np.float32)
+    ang_vel = np.array(
+      [msg.angular_velocity[0], msg.angular_velocity[1], msg.angular_velocity[2]],
+      dtype=np.float32,
+    )
+    self.update_vehicle_odom(position, velocity, quat, ang_vel)
 
-    def update_vehicle_odom(
-        self,
-        position: np.ndarray,
-        velocity: np.ndarray,
-        quat: np.ndarray,
-        ang_vel: np.ndarray,
-    ) -> None:
-        """
-        Update vehicle odometry data.
+    if self._node is not None:
+      self._node.run_inference()
 
-        Args:
-            position: Vehicle position in NED frame [N, E, D] (meters)
-            velocity: Vehicle velocity in NED frame [N, E, D] (m/s)
-            quat: Vehicle orientation quaternion [w, x, y, z] (Hamilton)
-            ang_vel: Angular velocity in FRD frame [roll, pitch, yaw] (rad/s)
-        """
-        self._position_ned = self._ensure_float32(position)
-        self._velocity_ned = self._ensure_float32(velocity)
-        self._quat = self._ensure_float32(quat)
-        self._ang_vel_frd = self._ensure_float32(ang_vel)
+  def _on_target(self, msg: TrajectorySetpoint) -> None:
+    """
+    Handle target setpoint message.
 
-    def update_imu(self, linear_accel: np.ndarray, ang_vel: np.ndarray) -> None:
-        """
-        Update IMU data.
+    Args:
+        msg: TrajectorySetpoint message containing target position
+    """
+    if not any(math.isnan(x) for x in msg.position):
+      self._target_pos_ned = np.array(msg.position, dtype=np.float32)
 
-        Args:
-            linear_accel: Linear acceleration (m/s^2)
-            ang_vel: Angular velocity in FRD frame [roll, pitch, yaw] (rad/s)
-        """
-        # Store angular velocity for get_ang_vel_b()
-        self._ang_vel_frd = ang_vel.astype(np.float32)
+  def update_vehicle_odom(
+    self,
+    position: np.ndarray,
+    velocity: np.ndarray,
+    quat: np.ndarray,
+    ang_vel: np.ndarray,
+  ) -> None:
+    """
+    Update vehicle odometry data.
 
-    def update_target(self, target_pos: np.ndarray) -> None:
-        """
-        Update target position.
+    Args:
+        position: Vehicle position in NED frame [N, E, D] (meters)
+        velocity: Vehicle velocity in NED frame [N, E, D] (m/s)
+        quat: Vehicle orientation quaternion [w, x, y, z] (Hamilton)
+        ang_vel: Angular velocity in FRD frame [roll, pitch, yaw] (rad/s)
+    """
+    self._position_ned = self._ensure_float32(position)
+    self._velocity_ned = self._ensure_float32(velocity)
+    self._quat = self._ensure_float32(quat)
+    self._ang_vel_frd = self._ensure_float32(ang_vel)
 
-        Args:
-            target_pos: Target position in NED frame [N, E, D] (meters)
-        """
-        self._target_pos_ned = self._ensure_float32(target_pos)
+  def update_target(self, target_pos: np.ndarray) -> None:
+    """
+    Update target position.
 
-    def update_last_action(self, action: np.ndarray) -> None:
-        """
-        Buffer the last action vector.
+    Args:
+        target_pos: Target position in NED frame [N, E, D] (meters)
+    """
+    self._target_pos_ned = self._ensure_float32(target_pos)
 
-        Args:
-            action: Action vector [thrust, roll_rate, pitch_rate, yaw_rate]
-        """
-        self._last_action = self._ensure_float32(action)
+  def update_last_action(self, action: np.ndarray) -> None:
+    """
+    Buffer the last action vector.
 
-    # =========================================================================
-    # Feature Get Methods
-    # =========================================================================
+    Args:
+        action: Action vector [thrust, roll_rate, pitch_rate, yaw_rate]
+    """
+    self._last_action = self._ensure_float32(action)
 
-    def get_to_target_b(self) -> np.ndarray | None:
-        """
-        Get target error vector in FLU body frame.
+  def get_to_target_b(self) -> np.ndarray:
+    """
+    Get target error vector in FLU body frame.
 
-        Computes: target_pos - vehicle_pos in FLU frame
+    Computes: target_pos - vehicle_pos in FLU frame
 
-        Returns:
-            3D numpy array representing target error in FLU frame, or None if data unavailable
-        """
-        if (
-            self._position_ned is None
-            or self._target_pos_ned is None
-            or self._quat is None
-        ):
-            return None
+    Returns:
+        3D numpy array representing target error in FLU frame
+    """
+    error_ned = self._target_pos_ned - self._position_ned
+    error_frd = self._ned_to_frd(self._quat, error_ned)
+    error_flu = self._frd_to_flu(error_frd)
+    return error_flu
 
-        # Compute target error in NED frame
-        error_ned = self._target_pos_ned - self._position_ned
+  def get_grav_dir_b(self) -> np.ndarray:
+    """
+    Get gravity direction vector in FLU body frame.
 
-        # Transform from NED to FRD using quaternion
-        error_frd = self._ned_to_frd(self._quat, error_ned)
+    Computes: Project gravity vector [0, 0, 9.81] from world to body frame and normalize
 
-        # Transform from FRD to FLU
-        error_flu = self._frd_to_flu(error_frd)
+    Returns:
+        3D normalized numpy array in FLU frame
+    """
+    gravity_ned = np.array([0.0, 0.0, self.GRAVITY_ACCEL], dtype=np.float32)
+    gravity_frd = self._ned_to_frd(self._quat, gravity_ned)
+    gravity_flu = self._frd_to_flu(gravity_frd)
+    norm = np.linalg.norm(gravity_flu)
+    return gravity_flu / norm if norm > 0 else gravity_flu
 
-        return error_flu
+  def get_lin_vel_b(self) -> np.ndarray:
+    """
+    Get linear velocity in FLU body frame.
 
-    def get_grav_dir_b(self) -> np.ndarray | None:
-        """
-        Get gravity direction vector in FLU body frame.
+    Computes: Transform linear velocity from NED world frame to FLU body frame
 
-        Computes: Project gravity vector [0, 0, 9.81] from world to body frame and normalize
+    Returns:
+        3D numpy array in FLU frame
+    """
+    velocity_frd = self._ned_to_frd(self._quat, self._velocity_ned)
+    velocity_flu = self._frd_to_flu(velocity_frd)
+    return velocity_flu
 
-        Returns:
-            3D normalized numpy array in FLU frame, or None if data unavailable
-        """
-        if self._quat is None:
-            return None
+  def get_ang_vel_b(self) -> np.ndarray:
+    """
+    Get angular velocity in FLU body frame.
 
-        # Gravity vector in world NED frame (pointing down)
-        gravity_ned = np.array([0.0, 0.0, self.GRAVITY_ACCEL], dtype=np.float32)
+    Computes: Transform angular velocity from FRD to FLU
 
-        # Transform from NED to FRD using quaternion
-        gravity_frd = self._ned_to_frd(self._quat, gravity_ned)
+    Returns:
+        3D numpy array in FLU frame
+    """
+    ang_vel_flu = self._frd_to_flu(self._ang_vel_frd)
+    return ang_vel_flu
 
-        # Transform from FRD to FLU
-        gravity_flu = self._frd_to_flu(gravity_frd)
+  def get_last_action(self) -> np.ndarray:
+    """
+    Get the buffered last action vector.
 
-        # Normalize
-        gravity_flu_norm = gravity_flu / np.linalg.norm(gravity_flu)
+    Returns:
+        4D numpy array [thrust, roll_rate, pitch_rate, yaw_rate]
+    """
+    return self._last_action
 
-        return gravity_flu_norm
+  def _ensure_float32(self, arr: np.ndarray) -> np.ndarray:
+    """
+    Ensure numpy array is float32 dtype.
 
-    def get_lin_vel_b(self) -> np.ndarray | None:
-        """
-        Get linear velocity in FLU body frame.
+    Args:
+        arr: Input numpy array
 
-        Computes: Transform linear velocity from NED world frame to FLU body frame
+    Returns:
+        Array converted to float32 dtype
+    """
+    return arr.astype(np.float32)
 
-        Returns:
-            3D numpy array in FLU frame, or None if data unavailable
-        """
-        if self._velocity_ned is None or self._quat is None:
-            return None
+  def _ned_to_frd(self, quat: np.ndarray, vec: np.ndarray) -> np.ndarray:
+    """
+    Transform a vector from NED frame to FRD body frame using quaternion.
 
-        # Transform from NED to FRD using quaternion
-        velocity_frd = self._ned_to_frd(self._quat, self._velocity_ned)
+    Uses active rotation: the vector is rotated, not the coordinate system.
 
-        # Transform from FRD to FLU
-        velocity_flu = self._frd_to_flu(velocity_frd)
+    Args:
+        quat: Quaternion [w, x, y, z] representing body orientation.
+        vec: Vector in NED frame [vx, vy, vz].
 
-        return velocity_flu
+    Returns:
+        Vector in FRD body frame [vx, vy, vz].
+    """
+    w, u = quat[0], quat[1:4]
+    uv = np.cross(u, vec)
+    uuv = np.cross(u, uv)
+    return vec + 2.0 * (w * uv + uuv)
 
-    def get_ang_vel_b(self) -> np.ndarray | None:
-        """
-        Get angular velocity in FLU body frame.
+  def _frd_to_flu(self, vec: np.ndarray) -> np.ndarray:
+    """
+    Transform a vector from FRD frame to FLU frame.
 
-        Computes: Transform angular velocity from FRD to FLU
+    FRD (Forward-Right-Down) and FLU (Forward-Left-Up) are both body frames
+    but with different axis conventions.
 
-        Returns:
-            3D numpy array in FLU frame, or None if data unavailable
-        """
-        if self._ang_vel_frd is None:
-            return None
+    This transformation rotates the Y and Z axes:
+    - X (Forward) stays the same
+    - Y: Right -> Left (negated)
+    - Z: Down -> Up (negated)
 
-        # Transform from FRD to FLU
-        ang_vel_flu = self._frd_to_flu(self._ang_vel_frd)
+    Args:
+        vec: Vector in FRD frame [vx, vy, vz].
 
-        return ang_vel_flu
-
-    def get_last_action(self) -> np.ndarray | None:
-        """
-        Get the buffered last action vector.
-
-        Returns:
-            4D numpy array [thrust, roll_rate, pitch_rate, yaw_rate], or None if not buffered
-        """
-        if self._last_action is None:
-            return None
-
-        return self._last_action
-
-    # =========================================================================
-    # Private Helper Methods
-    # =========================================================================
-
-    def _ensure_float32(self, arr: np.ndarray) -> np.ndarray:
-        """
-        Ensure numpy array is float32 dtype.
-
-        Args:
-            arr: Input numpy array
-
-        Returns:
-            Array converted to float32 dtype
-        """
-        return arr.astype(np.float32)
-
-    # =========================================================================
-    # Coordinate Transformation Helpers
-    # =========================================================================
-
-    def _ned_to_frd(self, quat: np.ndarray, vec: np.ndarray) -> np.ndarray:
-        """
-        Transform a vector from NED frame to FRD body frame using quaternion.
-
-        Uses active rotation: the vector is rotated, not the coordinate system.
-
-        Args:
-            quat: Quaternion [w, x, y, z] representing body orientation.
-            vec: Vector in NED frame [vx, vy, vz].
-
-        Returns:
-            Vector in FRD body frame [vx, vy, vz].
-        """
-        # Active rotation using quaternion
-        # v' = q * v * q_conj
-        w, u = quat[0], quat[1:4]
-        uv = np.cross(u, vec)
-        uuv = np.cross(u, uv)
-        return vec + 2.0 * (w * uv + uuv)
-
-    def _frd_to_flu(self, vec: np.ndarray) -> np.ndarray:
-        """
-        Transform a vector from FRD frame to FLU frame.
-
-        FRD (Forward-Right-Down) and FLU (Forward-Left-Up) are both body frames
-        but with different axis conventions.
-
-        This transformation rotates the Y and Z axes:
-        - X (Forward) stays the same
-        - Y: Right -> Left (negated)
-        - Z: Down -> Up (negated)
-
-        Args:
-            vec: Vector in FRD frame [vx, vy, vz].
-
-        Returns:
-            Vector in FLU frame [vx, vy, vz].
-        """
-        # Negate Y and Z components
-        result = vec.copy()
-        result[1] = -result[1]  # Right -> Left
-        result[2] = -result[2]  # Down -> Up
-        return result
+    Returns:
+        Vector in FLU frame [vx, vy, vz].
+    """
+    result = vec.copy()
+    result[1] = -result[1]
+    result[2] = -result[2]
+    return result

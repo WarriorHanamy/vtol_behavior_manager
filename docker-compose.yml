@@ -66,6 +66,7 @@ services:
     volumes:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
+      - /home/rec/server/policies:/home/ros/policies:ro
     stdin_open: true
     tty: true
     command: bash

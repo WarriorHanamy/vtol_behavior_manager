@@ -4,205 +4,148 @@ All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
 
-Isaac Position Control Neural Network Inference Node for PX4 (Refactored)
+Neural Position Control Node for PX4
 
-该节点实现从Isaac训练的位置控制模型的ROS2推理功能：
-1. 订阅VehicleOdometry和mode_neural_ctrl话题
-2. 将PX4 NED坐标系数据转换为Isaac训练格式的观测
-3. 使用ONNX Runtime进行神经网络推理
-4. 发布VehicleAccRatesSetpoint控制指令
-
-这个重构版本使用模块化组件架构，提供更好的可测试性和可维护性。
+This node implements neural network inference for position control:
+1. Subscribe to VehicleOdometry topic
+2. Compose observation using VtolFeatureProvider
+3. Run ONNX inference using MLPPolicyActor
+4. Publish VehicleAccRatesSetpoint control commands
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from pathlib import Path
 
 import hydra
 import numpy as np
-import rclpy
 import rclpy.node
-from control.action_post_processor import ActionPostProcessor
-from inference.actors import GRUPolicyActor, MLPPolicyActor
-from inference.history_buffer import ObservationHistoryBuffer
-from omegaconf.omegaconf import DictConfig, OmegaConf
+from omegaconf.omegaconf import DictConfig
+
+from neural_manager.neural_inference.control.action_post_processor import ActionPostProcessor
+from neural_manager.neural_inference.features import RevisionContext, VtolFeatureProvider
+from neural_manager.neural_inference.inference.actors import MLPPolicyActor
+from px4_msgs.msg import VehicleAccRatesSetpoint
+
+ARTIFACTS_ROOT = Path("/home/ros/policies")
+DEFAULT_TASK = "vtol_hover"
 
 
 class NeuralControlNode(rclpy.node.Node):
-  """Neural位置控制神经网络推理节点 (重构版本)"""
+  """Neural position control node with discovery-based model loading."""
 
   def __init__(self, cfg: DictConfig):
-    """初始化推理节点"""
-    # Store configuration first
     self.cfg = cfg
+
+    self._revision_ctx = self._resolve_revision_context()
+
     super().__init__(self.cfg.node.name)
 
-    # Pipeline instance
-    self._pipeline: NeuralInferencePipeline | None = None
+    self._feature_provider = VtolFeatureProvider(
+      self._revision_ctx.metadata_path,
+      node=self,
+      odometry_topic=self.cfg.node.odometry_topic,
+      target_topic=self.cfg.node.target_topic,
+    )
 
-    if self.init_components():
-      self.get_logger().info("🚀 Neural控制节点初始化成功!")
-    else:
-      self.get_logger().error("❌ 组件初始化失败，节点无法启动")
+    self._policy_actor = self._create_policy_actor()
 
-  def init_components(self) -> bool:
-    """Initialize all components and create inference pipeline."""
-    try:
-      # Load configuration parameters
-      target_position = np.array(self.cfg.target.position, dtype=np.float32)
-      target_yaw = self.cfg.target.yaw
+    self._action_processor = ActionPostProcessor(
+      max_acc=self.cfg.control.max_acc,
+      max_roll_pitch_rate=self.cfg.control.max_roll_pitch_rate,
+      max_yaw_rate=self.cfg.control.max_yaw_rate,
+      node_logger=self.get_logger(),
+      acc_fixed=self.cfg.debug.acc_fixed,
+      use_tanh_activation=self.cfg.control.action_processing.use_tanh_activation,
+      enable_action_clipping=self.cfg.control.action_processing.enable_action_clipping,
+      action_limits={
+        "min": -1.0,
+        "max": 1.0,
+      },
+      print_control_commands=self.cfg.debug.print_control,
+      ros_node=self,
+    )
 
-      # Create policy actor based on configuration
-      policy_actor = self._create_policy_actor()
+    self._control_pub = self.create_publisher(
+      VehicleAccRatesSetpoint,
+      self.cfg.node.setpoint_topic,
+      10,
+    )
 
-      if policy_actor is None:
-        return False
+    self._last_action = np.zeros(4, dtype=np.float32)
+    self._step_count = 0
 
-      # Create observation processor
-      observation_processor = ObservationProcessor(
-        target_position=target_position,
-        target_yaw=target_yaw,
-        node_logger=self.get_logger(),
-        enable_input_saturation=self.cfg.control.input_saturation.enabled,
-        saturation_limits={"target_position": self.cfg.control.input_saturation.target_position},
-        print_observations=self.cfg.debug.print_observation,
-        ros_node=self,  # Pass ROS2 node for publishing observation details
-      )
+    self.get_logger().info("🚀 Neural control node initialized")
+    self.get_logger().info(f"  Revision: {self._revision_ctx.revision_path.name}")
+    self.get_logger().info(f"  Obs dim: {self._revision_ctx.obs_dim}")
 
-      # Create action post processor (matching training environment action processing)
-      action_post_processor = ActionPostProcessor(
-        max_acc=self.cfg.control.max_acc,
-        max_roll_pitch_rate=self.cfg.control.max_roll_pitch_rate,
-        max_yaw_rate=self.cfg.control.max_yaw_rate,
-        node_logger=self.get_logger(),
-        acc_fixed=self.cfg.debug.acc_fixed,
-        use_tanh_activation=self.cfg.control.action_processing.use_tanh_activation,
-        enable_action_clipping=self.cfg.control.action_processing.enable_action_clipping,
-        action_limits={
-          "min": self.cfg.control.input_saturation.actions[0],
-          "max": self.cfg.control.input_saturation.actions[1],
-        },
-        print_control_commands=self.cfg.debug.print_control,
-        ros_node=self,
-      )
+  def _resolve_revision_context(self) -> RevisionContext:
+    """Resolve model revision via discovery. Raises on failure."""
+    task = getattr(self.cfg.model, "task", DEFAULT_TASK)
+    ctx = RevisionContext.from_discovery(ARTIFACTS_ROOT, task)
+    print(f"✓ Discovered revision: {ctx.revision_path.name}")
+    print(f"  Model: {ctx.model_path}")
+    print(f"  Obs dim: {ctx.obs_dim}")
+    return ctx
 
-      # Create communicator
-      communicator = Communicator(
-        node=self,
-        odometry_topic=self.cfg.node.odometry_topic,
-        setpoint_topic=self.cfg.node.setpoint_topic,
-        control_mode=self.cfg.control.control_mode,
-      )
+  def _create_policy_actor(self) -> MLPPolicyActor:
+    """Create policy actor from discovered revision."""
+    expected_input_shape = list(self._revision_ctx.get_expected_input_shape())
+    expected_output_shape = list(self._revision_ctx.get_expected_output_shape())
 
-      # Create history buffer if needed (for MLP actors)
-      history_buffer = None
-      if self.cfg.model.actor_type == "mlp" and self.cfg.model.history.enabled:
-        history_buffer = ObservationHistoryBuffer(
-          history_length=self.cfg.model.history.length,
-          obs_dim=self.cfg.model.history.obs_dim,
-          node_logger=self.get_logger(),
-        )
+    self.get_logger().info(f"Model shapes - input: {expected_input_shape}, output: {expected_output_shape}")
 
-      # Create and initialize pipeline
-      self._pipeline = NeuralInferencePipeline(
-        node=self,
-        policy_actor=policy_actor,
-        observation_processor=observation_processor,
-        action_post_processor=action_post_processor,
-        communicator=communicator,
-        history_buffer=history_buffer,
-      )
+    actor = MLPPolicyActor(
+      self._revision_ctx.model_path,
+      providers=self.cfg.model.inference.providers,
+      node_logger=self.get_logger(),
+      expected_input_shape=expected_input_shape,
+      expected_output_shape=expected_output_shape,
+    )
 
-      if not self._pipeline.initialize():
-        self.get_logger().error("❌ 管道初始化失败")
-        return False
-      return True
+    self.get_logger().info("✓ MLP policy actor created")
+    return actor
 
-    except Exception as e:
-      self.get_logger().error(f"❌ 组件初始化失败: {e}")
-      return False
+  def run_inference(self) -> None:
+    """Run neural inference and publish control command."""
+    self._feature_provider.update_last_action(self._last_action)
 
-  def _create_policy_actor(self) -> object | None:
-    """Create policy actor based on configuration."""
-    try:
-      # Get actor type and providers
-      actor_type = self.cfg.model.actor_type
-      providers = self.cfg.model.inference.providers
-      model_path = self.cfg.model.path
+    obs = self._feature_provider.get_all_features()
 
-      # Get expected shapes for validation (always required)
-      expected_shapes = self.cfg.model.expected_shapes[actor_type]
-      expected_input_shape = expected_shapes.input
-      expected_output_shape = expected_shapes.output
+    raw_action = self._policy_actor(obs)
 
-      # Create actor based on type
-      if actor_type == "gru":
-        self.get_logger().info("使用 GRU 执行器")
-        actor = GRUPolicyActor(
-          model_path,
-          hidden_dim=self.cfg.model.hidden_dim,
-          num_layers=self.cfg.model.num_layers,
-          providers=providers,
-          node_logger=self.get_logger(),
-          expected_input_shape=expected_input_shape,
-          expected_output_shape=expected_output_shape,
-        )
-      elif actor_type == "mlp":
-        self.get_logger().info("使用 MLP 执行器")
-        actor = MLPPolicyActor(
-          model_path,
-          providers=providers,
-          node_logger=self.get_logger(),
-          expected_input_shape=expected_input_shape,
-          expected_output_shape=expected_output_shape,
-        )
-      else:
-        self.get_logger().error(f"不支持的执行器类型: {actor_type}")
-        return None
+    control_msg = self._action_processor.process_action(raw_action)
 
-      return actor
+    self._control_pub.publish(control_msg)
 
-    except Exception as e:
-      self.get_logger().error(f"❌ 创建策略执行器失败: {e}")
-      return None
+    self._last_action = raw_action.copy()
 
-  def get_pipeline_info(self) -> dict:
-    """Get comprehensive pipeline information."""
-    if self._pipeline is None:
-      return {"status": "not_initialized"}
-
-    return self._pipeline.get_all_components_info()
-
-  def shutdown_pipeline(self):
-    """Shutdown the inference pipeline."""
-    if self._pipeline is not None:
-      self._pipeline.shutdown()
-      self._pipeline = None
+    self._step_count += 1
+    if self.cfg.debug.print_observation and self._step_count % 100 == 0:
+      self.get_logger().info(f"Step {self._step_count}: obs={obs[:5]}... action={raw_action}")
 
 
 @hydra.main(version_base="1.2", config_path="config", config_name="pos_ctrl_config")
 def main(cfg: DictConfig) -> int:
-  """主函数"""
+  """Main entry point."""
   rclpy.init()
 
   try:
     node = NeuralControlNode(cfg)
-    if node._pipeline.initialize():
-      rclpy.spin(node)
-    else:
-      rclpy.shutdown()
-      return 1
-
+    rclpy.spin(node)
+  except FileNotFoundError as e:
+    print(f"❌ Discovery failed: {e}")
+    rclpy.shutdown()
+    return 1
   except KeyboardInterrupt:
     print("用户中断，正在关闭...")
   except Exception as e:
-    print(f"节点运行错误: {e}")
+    print(f"❌ Node error: {e}")
+    rclpy.shutdown()
     return 1
   finally:
-    # Ensure pipeline is properly shutdown
-    if "node" in locals() and hasattr(node, "shutdown_pipeline"):
-      node.shutdown_pipeline()
+    if "node" in locals():
+      node.destroy_node()
     rclpy.shutdown()
 
   return 0
