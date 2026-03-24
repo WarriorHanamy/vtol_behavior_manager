@@ -8,7 +8,6 @@
 #include <px4_msgs/msg/vehicle_acc_rates_setpoint.hpp>
 #include <neural_executor/mavlink_logger.hpp>
 
-#include <thread>
 #include <chrono>
 
 using namespace std::chrono_literals;
@@ -175,6 +174,9 @@ private:
 
   std::unique_ptr<neural_executor::MavlinkLogger> _mavlink_logger;
 
+  bool _waiting_for_neural_control{false};
+  rclcpp::Time _neural_wait_start_time;
+
   bool isNeuralControlAvailable()
   {
     if (!_neural_control_received) return false;
@@ -188,6 +190,21 @@ private:
     if (_vehicle_status->navState() != POSCTL_NAV_STATE) return;
     if (!_manual_control_input->isValid()) return;
 
+    if (_waiting_for_neural_control) {
+      auto elapsed = (node().get_clock()->now() - _neural_wait_start_time).seconds();
+      if (isNeuralControlAvailable()) {
+        _waiting_for_neural_control = false;
+        RCLCPP_INFO(node().get_logger(), "Neural control available, entering NeuralCtrl");
+        _mavlink_logger->info("[Neural] Entering NeuralCtrl mode");
+        runState(State::NeuralCtrl, px4_ros2::Result::Success);
+      } else if (elapsed >= NEURAL_CONTROL_WAIT_S) {
+        _waiting_for_neural_control = false;
+        RCLCPP_ERROR(node().get_logger(), "Neural control timeout - cannot enter NeuralCtrl");
+        _mavlink_logger->error("[Neural] neural_infer not responding");
+      }
+      return;
+    }
+
     bool aux1_high = _manual_control_input->aux1() > 0.5f;
     bool button_pressed = _manual_control_input->buttons() == RC_NN_CMD_MASK;
 
@@ -196,25 +213,10 @@ private:
 
     if (aux1_rising || button_rising) {
       if (!isNeuralControlAvailable()) {
+        _waiting_for_neural_control = true;
+        _neural_wait_start_time = node().get_clock()->now();
         RCLCPP_WARN(node().get_logger(), "Neural control not available, waiting...");
         _mavlink_logger->warning("[Neural] Waiting for neural_infer...");
-
-        auto wait_start = node().get_clock()->now();
-        while ((node().get_clock()->now() - wait_start).seconds() < NEURAL_CONTROL_WAIT_S) {
-          if (isNeuralControlAvailable()) {
-            RCLCPP_INFO(node().get_logger(), "Neural control available, entering NeuralCtrl");
-            _mavlink_logger->info("[Neural] Entering NeuralCtrl mode");
-            runState(State::NeuralCtrl, px4_ros2::Result::Success);
-            _aux1_high_last = aux1_high;
-            _button_pressed_last = button_pressed;
-            return;
-          }
-          rclcpp::spin_some(node().get_node_base_interface());
-          std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-
-        RCLCPP_ERROR(node().get_logger(), "Neural control timeout - cannot enter NeuralCtrl");
-        _mavlink_logger->error("[Neural] neural_infer not responding");
         _aux1_high_last = aux1_high;
         _button_pressed_last = button_pressed;
         return;
