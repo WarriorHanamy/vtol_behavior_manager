@@ -86,7 +86,7 @@ sim-attach:
 # Neural Services Management (group-based)
 # =============================================================================
 
-.PHONY: install neural-start neural-stop neural-status logs logs-web neural test
+.PHONY: install neural-start neural-stop neural-status logs logs-web neural test neural-infer
 
 install:
 	@echo ">>> Installing neural services..."
@@ -127,6 +127,17 @@ neural-status:
 	@echo ""
 	@echo "=== Test Target (Group B) ==="
 	@systemctl --user status test.target --no-pager || true
+
+neural-infer:
+	@echo ">>> Running neural_infer in ros2 container..."
+	@CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+	if [ -z "$$CONTAINER" ]; then \
+		echo "Error: ros2 container not running. Use 'make sim' first."; \
+		exit 1; \
+	fi; \
+	echo ">>> Syncing src to container..."; \
+	docker cp src/. "$$CONTAINER":/home/ros/ros2_ws/src/; \
+	docker exec -i -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 src/neural_manager/neural_inference/neural_infer.py"
 
 logs:
 	@echo ">>> Streaming all service logs (press Ctrl+C to exit)..."
