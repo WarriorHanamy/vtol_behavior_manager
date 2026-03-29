@@ -16,23 +16,16 @@ build:
 
 .PHONY: sync-msg-submodule
 
-REF_NEUPILOT_REMOTE ?= https://github.com/WarriorHanamy/PX4-Neupilot.git
 MSG_SUBMODULE_PATH := src/px4_msgs/msg
 
 sync-msg-submodule:
-	@echo ">>> Syncing msg submodule to ref-neupilot..."
-	@if ! git remote | grep -q '^ref-neupilot$$'; then \
-		echo ">>> Adding ref-neupilot remote..."; \
-		git remote add ref-neupilot $(REF_NEUPILOT_REMOTE); \
-	fi
-	@echo ">>> Fetching ref-neupilot..."
-	git fetch ref-neupilot
-	@MSG_COMMIT=$$(git ls-tree ref-neupilot/main msg | awk '{print $$3}'); \
-	MSG_URL=$$(git show ref-neupilot/main:.gitmodules | grep -A3 '\[submodule "msg"\]' | grep 'url' | sed 's/.*= *//'); \
+	@echo ">>> Fetching msg submodule info via gh api..."
+	@MSG_COMMIT=$$(gh api repos/WarriorHanamy/PX4-Neupilot/git/trees/main --jq '.tree[] | select(.path=="msg") | .sha'); \
+	MSG_URL=$$(gh api repos/WarriorHanamy/PX4-Neupilot/contents/.gitmodules --jq '.content' | base64 -d | grep -A3 '\[submodule "msg"\]' | grep 'url' | sed 's/.*= *//'); \
 	echo ">>> Target commit: $$MSG_COMMIT"; \
 	echo ">>> Target URL: $$MSG_URL"; \
-	echo ">>> Updating submodule remote URL..."; \
-	cd $(MSG_SUBMODULE_PATH) && git remote set-url origin $$MSG_URL && git fetch origin && git checkout $$MSG_COMMIT; \
+	echo ">>> Direct checkout to commit..."; \
+	cd $(MSG_SUBMODULE_PATH) && git remote set-url origin $$MSG_URL && git checkout $$MSG_COMMIT; \
 	cd $(CURDIR) && git config -f .gitmodules submodule.$(MSG_SUBMODULE_PATH).url "$$MSG_URL"; \
 	cd $(CURDIR) && git config submodule.$(MSG_SUBMODULE_PATH).url "$$MSG_URL"; \
 	echo ">>> Submodule synced. Changes to commit:"; \
