@@ -1,4 +1,16 @@
-.PHONY: list docker-offload-build
+.PHONY: list docker-offload-build docker-px4-build
+
+# =============================================================================
+# Build PX4 (no-cache)
+# =============================================================================
+
+docker-px4-build:
+	@echo ">>> Tagging px4-deps as px4_deps..."
+	@docker tag px4-deps:jammy-harmonic px4_deps:latest
+	@echo ">>> Building px4-gazebo image without cache..."
+	@docker build --no-cache \
+		-f dockerfiles/px4-gazebo.dockerfile \
+		-t px4-gazebo-harmonic-vtol:v1 .
 
 # =============================================================================
 # Build Offload (for AI decision-making)
