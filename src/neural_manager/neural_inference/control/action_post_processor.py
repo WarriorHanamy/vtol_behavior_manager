@@ -49,8 +49,7 @@ class ActionPostProcessor:
     Args:
         min_thrust_g: Minimum thrust in g (default 0.0)
         max_thrust_g: Maximum thrust in g (default 2.0)
-        max_roll_pitch_rate: Maximum roll/pitch angular rate in rad/s
-        max_yaw_rate: Maximum yaw angular rate in rad/s
+        max_ang_vel: Maximum angular rates (roll, pitch, yaw) in rad/s
         node_logger: ROS2 node logger for debugging
         acc_fixed: Whether to use fixed thrust acceleration
         use_tanh_activation: Whether to apply tanh activation
@@ -67,6 +66,7 @@ class ActionPostProcessor:
     self._use_tanh_activation = use_tanh_activation
     self._enable_action_clipping = enable_action_clipping
     self._print_control_commands = print_control_commands
+    self._ros_node = ros_node
 
     self._angular_rate_flu_pub = None
     self._angular_rate_frd_pub = None
@@ -118,9 +118,9 @@ class ActionPostProcessor:
     pitch_rate_raw = action[2]
     yaw_rate_raw = action[3]
 
-    roll_rate = roll_rate_raw * self._max_roll_pitch_rate
-    pitch_rate = pitch_rate_raw * self._max_roll_pitch_rate
-    yaw_rate = yaw_rate_raw * self._max_yaw_rate
+    roll_rate = roll_rate_raw * self._max_ang_vel[0]
+    pitch_rate = pitch_rate_raw * self._max_ang_vel[1]
+    yaw_rate = yaw_rate_raw * self._max_ang_vel[2]
 
     rate_flu = np.array([roll_rate, pitch_rate, yaw_rate])
     rate_frd = frd_flu_rotate(rate_flu)
@@ -229,18 +229,18 @@ class ActionPostProcessor:
     Returns:
         Dictionary containing action limit configuration
     """
-        return {
-            "min": self._action_limits["min"],
-            "max": self._action_limits["max"],
-            "min_thrust_g": self._min_thrust_g,
-            "max_thrust_g": self._max_thrust_g,
-            "max_ang_vel": self._max_ang_vel,
-            "acc_fixed": self._acc_fixed,
-            "use_tanh_activation": self._use_tanh_activation,
-            "enable_action_clipping": self._enable_action_clipping,
-            "print_control_commands": self._print_control_commands
-            "ros_node": ros_node,
-        }
+    return {
+      "min": self._action_limits["min"],
+      "max": self._action_limits["max"],
+      "min_thrust_g": self._min_thrust_g,
+      "max_thrust_g": self._max_thrust_g,
+      "max_ang_vel": self._max_ang_vel,
+      "acc_fixed": self._acc_fixed,
+      "use_tanh_activation": self._use_tanh_activation,
+      "enable_action_clipping": self._enable_action_clipping,
+      "print_control_commands": self._print_control_commands,
+      "ros_node": self._ros_node,
+    }
 
   def get_last_action(self) -> np.ndarray:
     """
@@ -287,9 +287,9 @@ class ActionPostProcessor:
     pitch_rate_raw = action[2]
     yaw_rate_raw = action[3]
 
-    roll_rate = roll_rate_raw * self._max_roll_pitch_rate
-    pitch_rate = pitch_rate_raw * self._max_roll_pitch_rate
-    yaw_rate = yaw_rate_raw * self._max_yaw_rate
+    roll_rate = roll_rate_raw * self._max_ang_vel[0]
+    pitch_rate = pitch_rate_raw * self._max_ang_vel[1]
+    yaw_rate = yaw_rate_raw * self._max_ang_vel[2]
 
     thrust_acc = self._convert_thrust_to_acceleration(thrust_raw)
     return {
@@ -375,8 +375,7 @@ class ActionPostProcessor:
     return {
       "min_thrust_g": self._min_thrust_g,
       "max_thrust_g": self._max_thrust_g,
-      "max_roll_pitch_rate": self._max_roll_pitch_rate,
-      "max_yaw_rate": self._max_yaw_rate,
+      "max_ang_vel": self._max_ang_vel,
       "acc_fixed": self._acc_fixed,
       "last_action": self._last_action.tolist(),
     }

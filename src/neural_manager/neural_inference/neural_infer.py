@@ -54,8 +54,7 @@ class NeuralControlNode(rclpy.node.Node):
     self._action_processor = ActionPostProcessor(
       min_thrust_g=self.cfg.control.min_thrust_g,
       max_thrust_g=self.cfg.control.max_thrust_g,
-      max_roll_pitch_rate=self.cfg.control.max_roll_pitch_rate,
-      max_yaw_rate=self.cfg.control.max_yaw_rate,
+      max_ang_vel=tuple(self.cfg.control.max_ang_vel),
       node_logger=self.get_logger(),
       acc_fixed=self.cfg.debug.acc_fixed,
       use_tanh_activation=self.cfg.control.action_processing.use_tanh_activation,

@@ -33,8 +33,7 @@ control:
   control_mode: "acc_rates"
   min_thrust_g: 0.0
   max_thrust_g: 2.0
-  max_roll_pitch_rate: 3.0
-  max_yaw_rate: 1.0
+  max_ang_vel: [3.0, 5.0, 3.0]
   action_processing:
     use_tanh_activation: false
     enable_action_clipping: true
