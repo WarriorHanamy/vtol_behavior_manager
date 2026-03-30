@@ -1,4 +1,12 @@
-.PHONY: list docker-offload-build docker-px4-build
+.PHONY: list docker-offload-build docker-px4-build docker-ros2-build
+
+# =============================================================================
+# Build ROS2 Image (layered by change frequency)
+# =============================================================================
+
+docker-ros2-build:
+	@echo ">>> Building ros2-vtol image (layered: px4_msgs -> px4-ros2 -> neural_manager)..."
+	@docker build -f dockerfiles/ros2.dockerfile -t ros2-vtol:latest .
 
 # =============================================================================
 # Build PX4 (no-cache)
@@ -24,10 +32,61 @@ docker-offload-build:
 	@mkdir -p build
 	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
 	@docker cp src/neural_manager $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
-	@docker cp src/px4-ros2-interface-lib $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
 	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
 		"source /opt/ros/humble/setup.bash && \
-		 colcon build --packages-select neural_executor px4_ros2_cpp 2>&1" | tee build/compile.log
+		 source /home/ros/ros2_ws/install/setup.bash && \
+		 colcon build --packages-select neural_executor 2>&1" | tee build/compile.log
+	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
+	@echo ">>> Build log: build/compile.log"
+
+.PHONY: docker-build-px4-msgs docker-build-px4-ros2 docker-build-neural docker-build-all
+
+docker-build-px4-msgs:
+	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
+	@mkdir -p build
+	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
+	@docker cp src/px4_msgs $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
+	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
+		"cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && \
+		 source /opt/ros/humble/setup.bash && \
+		 colcon build --packages-select px4_msgs 2>&1" | tee build/compile.log
+	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
+	@echo ">>> Build log: build/compile.log"
+
+docker-build-px4-ros2:
+	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
+	@mkdir -p build
+	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
+	@docker cp src/px4_msgs $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
+	@docker cp src/px4-ros2-interface-lib $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
+	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
+		"cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && \
+		 source /opt/ros/humble/setup.bash && \
+		 colcon build --packages-select px4_msgs px4_ros2_cpp 2>&1" | tee build/compile.log
+	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
+	@echo ">>> Build log: build/compile.log"
+
+docker-build-neural:
+	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
+	@mkdir -p build
+	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
+	@docker cp src/neural_manager $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
+	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
+		"source /opt/ros/humble/setup.bash && \
+		 source /home/ros/ros2_ws/install/setup.bash && \
+		 colcon build --packages-select neural_executor 2>&1" | tee build/compile.log
+	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
+	@echo ">>> Build log: build/compile.log"
+
+docker-build-all:
+	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
+	@mkdir -p build
+	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
+	@docker cp src/. $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
+	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
+		"cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && \
+		 source /opt/ros/humble/setup.bash && \
+		 colcon build 2>&1" | tee build/compile.log
 	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
 	@echo ">>> Build log: build/compile.log"
 

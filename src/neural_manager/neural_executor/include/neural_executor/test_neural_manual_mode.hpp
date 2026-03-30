@@ -49,9 +49,9 @@ public:
 
     RCLCPP_INFO(_node.get_logger(),
                 "TestNeuralManualMode initialized: max_tilt=%.1f deg, "
-                "max_acc=%.1f m/s^2, yaw_weight=%.2f",
+                "max_acc=%.1f m/s^2, max_yaw_rate=%.1f rad/s, throttle_deadzone=%.2f",
                 px4_ros2::radToDeg(_config.max_tilt_angle), _config.max_acc,
-                _config.yaw_weight);
+                _config.max_yaw_rate, _config.throttle_deadzone);
   }
 
   ~TestNeuralManualMode() override = default;
@@ -108,10 +108,11 @@ protected:
 private:
   struct Config {
     float max_tilt_angle{0.785f};
-    float max_acc{19.6f};
-    float yaw_weight{0.5f};
+    float max_acc{12.0f};
     Eigen::Vector3f p_gains{5.0f, 5.0f, 3.0f};
     float max_rate{3.0f};
+    float max_yaw_rate{1.0f};
+    float throttle_deadzone{0.1f};
   };
 
   std::shared_ptr<px4_ros2::ManualControlInput> _manual_control_input;
@@ -143,10 +144,6 @@ private:
             _config.max_acc = node["max_acc"].as<float>();
           }
 
-          if (node["yaw_weight"]) {
-            _config.yaw_weight = node["yaw_weight"].as<float>();
-          }
-
           if (node["p_gains"]) {
             auto gains = node["p_gains"];
             if (gains.size() == 3) {
@@ -158,6 +155,14 @@ private:
 
           if (node["max_rate"]) {
             _config.max_rate = node["max_rate"].as<float>();
+          }
+
+          if (node["max_yaw_rate"]) {
+            _config.max_yaw_rate = node["max_yaw_rate"].as<float>();
+          }
+
+          if (node["throttle_deadzone"]) {
+            _config.throttle_deadzone = node["throttle_deadzone"].as<float>();
           }
 
           RCLCPP_INFO(_node.get_logger(),
@@ -173,9 +178,10 @@ private:
 
     _config.max_tilt_angle = std::clamp(_config.max_tilt_angle, 0.1f, 1.4f);
     _config.max_acc = std::clamp(_config.max_acc, 5.0f, 30.0f);
-    _config.yaw_weight = std::clamp(_config.yaw_weight, 0.0f, 1.0f);
     _config.p_gains = _config.p_gains.cwiseMax(0.1f).cwiseMin(20.0f);
     _config.max_rate = std::clamp(_config.max_rate, 0.5f, 10.0f);
+    _config.max_yaw_rate = std::clamp(_config.max_yaw_rate, 0.1f, 5.0f);
+    _config.throttle_deadzone = std::clamp(_config.throttle_deadzone, 0.0f, 0.3f);
   }
 
   Eigen::Quaternionf generateTiltSetpoint(float stick_roll,
@@ -195,41 +201,39 @@ private:
 
   float computeAccSetpoint(float stick_throttle) const {
     constexpr float gravity = 9.81f;
-    const float acc_sp = gravity + stick_throttle * (_config.max_acc - gravity);
+    float throttle = stick_throttle;
+    if (std::abs(throttle) < _config.throttle_deadzone) {
+      throttle = 0.0f;
+    } else {
+      throttle = throttle - std::copysign(_config.throttle_deadzone, throttle);
+      throttle /= (1.0f - _config.throttle_deadzone);
+    }
+    const float acc_sp = gravity + throttle * (_config.max_acc - gravity);
     return std::min(-acc_sp, 0.0f);
   }
 
   Eigen::Vector3f computeRateSetpoint(const Eigen::Quaternionf &q_current,
                                       const Eigen::Quaternionf &q_target,
                                       float stick_yaw) const {
-    using namespace px4_ros2;
-
     const Eigen::Vector3f z_current = extractZAxis(q_current);
     const Eigen::Vector3f z_target = extractZAxis(q_target);
     const Eigen::Quaternionf q_tilt_correction =
         tiltCorrectionQuaternion(z_current, z_target);
-    const Eigen::Quaternionf q_reduced = q_tilt_correction * q_current;
-    const Eigen::Quaternionf q_reduced_inv = q_reduced.inverse();
-    const Eigen::Quaternionf q_yaw_diff = q_reduced_inv * q_target;
-    const float yaw_error_angle = extractYawAngle(q_yaw_diff);
-    const float weighted_yaw_error = yaw_error_angle * _config.yaw_weight;
-    const float yaw_setpoint = weighted_yaw_error + stick_yaw * 1.0f;
-    const Eigen::Quaternionf q_yaw_rotation =
-        yawRotationQuaternion(yaw_setpoint);
-    const Eigen::Quaternionf q_final_target = q_reduced * q_yaw_rotation;
-    const Eigen::Quaternionf q_error = q_current.inverse() * q_final_target;
+    const Eigen::Quaternionf q_error = q_current.inverse() * (q_tilt_correction * q_current);
 
     Eigen::Vector3f rate_setpoint;
     rate_setpoint.x() = 2.0f * q_error.x() * _config.p_gains.x();
     rate_setpoint.y() = 2.0f * q_error.y() * _config.p_gains.y();
-    rate_setpoint.z() = 2.0f * q_error.z() * _config.p_gains.z();
+    rate_setpoint.z() = stick_yaw * _config.max_yaw_rate;
 
     if (q_error.w() < 0.0f) {
-      rate_setpoint = -rate_setpoint;
+      rate_setpoint.x() = -rate_setpoint.x();
+      rate_setpoint.y() = -rate_setpoint.y();
     }
 
-    rate_setpoint =
-        rate_setpoint.cwiseMin(_config.max_rate).cwiseMax(-_config.max_rate);
+    rate_setpoint.x() = std::clamp(rate_setpoint.x(), -_config.max_rate, _config.max_rate);
+    rate_setpoint.y() = std::clamp(rate_setpoint.y(), -_config.max_rate, _config.max_rate);
+    rate_setpoint.z() = std::clamp(rate_setpoint.z(), -_config.max_yaw_rate, _config.max_yaw_rate);
 
     return rate_setpoint;
   }
@@ -255,16 +259,5 @@ private:
   tiltCorrectionQuaternion(const Eigen::Vector3f &z_current,
                            const Eigen::Vector3f &z_target) {
     return Eigen::Quaternionf::FromTwoVectors(z_current, z_target).normalized();
-  }
-
-  static float extractYawAngle(const Eigen::Quaternionf &q) {
-    const float w = q.w(), x = q.x(), y = q.y(), z = q.z();
-    return std::atan2(2.0f * (w * z + x * y), 1.0f - 2.0f * (y * y + z * z));
-  }
-
-  static Eigen::Quaternionf yawRotationQuaternion(float yaw_angle) {
-    return Eigen::Quaternionf(
-               Eigen::AngleAxisf(yaw_angle, Eigen::Vector3f::UnitZ()))
-        .normalized();
   }
 };

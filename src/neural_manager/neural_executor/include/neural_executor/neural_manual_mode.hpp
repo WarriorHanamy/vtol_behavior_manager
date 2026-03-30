@@ -42,8 +42,8 @@ public:
     _acc_rates_setpoint = std::make_shared<px4_ros2::AccRatesSetpointType>(*this);
 
     RCLCPP_INFO(_node.get_logger(),
-      "NeuralManualMode initialized: max_tilt=%.1f deg, max_acc=%.1f m/s^2, yaw_weight=%.2f",
-      radToDeg(_config.max_tilt_angle), _config.max_acc, _config.yaw_weight);
+      "NeuralManualMode initialized: max_tilt=%.1f deg, max_acc=%.1f m/s^2, max_yaw_rate=%.1f rad/s",
+      radToDeg(_config.max_tilt_angle), _config.max_acc, _config.max_yaw_rate);
   }
 
   ~NeuralManualMode() override = default;
@@ -113,11 +113,11 @@ private:
   // Configuration parameters
   struct Config
   {
-    float max_tilt_angle{0.785f};      // 45 degrees in radians
-    float max_acc{19.6f};              // 2g in m/s^2
-    float yaw_weight{0.5f};
-    Eigen::Vector3f p_gains{5.0f, 5.0f, 3.0f}; // [roll, pitch, yaw]
-    float max_rate{3.0f};              // rad/s for rate limiting
+    float max_tilt_angle{0.785f};
+    float max_acc{19.6f};
+    Eigen::Vector3f p_gains{5.0f, 5.0f, 3.0f};
+    float max_rate{3.0f};
+    float max_yaw_rate{1.0f};
   };
 
   // Member variables
@@ -156,10 +156,6 @@ private:
             _config.max_acc = node["max_acc"].as<float>();
           }
 
-          if (node["yaw_weight"]) {
-            _config.yaw_weight = node["yaw_weight"].as<float>();
-          }
-
           if (node["p_gains"]) {
             auto gains = node["p_gains"];
             if (gains.size() == 3) {
@@ -173,6 +169,10 @@ private:
 
           if (node["max_rate"]) {
             _config.max_rate = node["max_rate"].as<float>();
+          }
+
+          if (node["max_yaw_rate"]) {
+            _config.max_yaw_rate = node["max_yaw_rate"].as<float>();
           }
 
           RCLCPP_INFO(_node.get_logger(),
@@ -192,11 +192,11 @@ private:
     }
 
     // Validate and clamp configuration
-    _config.max_tilt_angle = std::clamp(_config.max_tilt_angle, 0.1f, 1.4f); // ~5-80 deg
-    _config.max_acc = std::clamp(_config.max_acc, 5.0f, 30.0f); // Reasonable range
-    _config.yaw_weight = std::clamp(_config.yaw_weight, 0.0f, 1.0f);
+    _config.max_tilt_angle = std::clamp(_config.max_tilt_angle, 0.1f, 1.4f);
+    _config.max_acc = std::clamp(_config.max_acc, 5.0f, 30.0f);
     _config.p_gains = _config.p_gains.cwiseMax(0.1f).cwiseMin(20.0f);
     _config.max_rate = std::clamp(_config.max_rate, 0.5f, 10.0f);
+    _config.max_yaw_rate = std::clamp(_config.max_yaw_rate, 0.1f, 5.0f);
   }
 
   // ========================================================================
@@ -255,81 +255,29 @@ private:
     return std::max(acc_sp, 0.5f);  // Minimum 0.5g upward
   }
 
-  /**
-   * @brief Compute rate setpoint using tilt-prioritizing attitude control
-   *
-   * This algorithm prioritizes tilt (roll/pitch) over yaw for smoother control.
-   *
-   * Input:
-   * - q_current: Current attitude quaternion
-   * - q_target: Target tilt quaternion (from generateTiltSetpoint)
-   * - stick_yaw: Yaw stick input [-1, 1] for manual yaw rate control
-   *
-   * Output: Rate setpoint [roll_rate, pitch_rate, yaw_rate] in rad/s
-   *
-   * Algorithm steps:
-   * 1. Extract Z axes from current and target quaternions
-   * 2. Compute tilt correction quaternion to align Z axes
-   * 3. Create q_reduced (perfect tilt, current yaw)
-   * 4. Extract pure yaw error
-   * 5. Apply yaw_weight to yaw_error_angle
-   * 6. Add yaw stick input for manual yaw control
-   * 7. Create final target quaternion
-   * 8. Compute error quaternion
-   * 9. Convert to rate setpoint using P-gains
-   * 10. Apply rate limiting
-   */
   Eigen::Vector3f computeRateSetpoint(
     const Eigen::Quaternionf& q_current,
     const Eigen::Quaternionf& q_target,
     float stick_yaw) const
   {
-    using namespace px4_ros2;
-
-    // Step 1: Extract Z axes from current and target quaternions
     const Eigen::Vector3f z_current = extractZAxis(q_current);
     const Eigen::Vector3f z_target = extractZAxis(q_target);
-
-    // Step 2: Compute tilt correction quaternion to align Z axes
     const Eigen::Quaternionf q_tilt_correction = tiltCorrectionQuaternion(z_current, z_target);
+    const Eigen::Quaternionf q_error = q_current.inverse() * (q_tilt_correction * q_current);
 
-    // Step 3: Create q_reduced (perfect tilt, current yaw)
-    const Eigen::Quaternionf q_reduced = q_tilt_correction * q_current;
-
-    // Step 4: Extract pure yaw error
-    const Eigen::Quaternionf q_reduced_inv = q_reduced.inverse();
-    const Eigen::Quaternionf q_yaw_diff = q_reduced_inv * q_target;
-    const float yaw_error_angle = extractYawAngle(q_yaw_diff);
-
-    // Step 5: Apply yaw weight (reduce yaw authority for smoother control)
-    const float weighted_yaw_error = yaw_error_angle * _config.yaw_weight;
-
-    // Step 6: Add yaw stick input for manual yaw control (1 rad/s max manual yaw)
-    const float yaw_setpoint = weighted_yaw_error + stick_yaw * 1.0f;
-
-    // Step 7: Create final target quaternion
-    const Eigen::Quaternionf q_yaw_rotation = yawRotationQuaternion(yaw_setpoint);
-    const Eigen::Quaternionf q_final_target = q_reduced * q_yaw_rotation;
-
-    // Step 8: Compute error quaternion
-    const Eigen::Quaternionf q_error = q_current.inverse() * q_final_target;
-
-    // Step 9: Convert to rate setpoint using P-gains
-    // Formula: rate = 2 * q_error.xyz * p_gains
-    // Small angle approximation: for small angles, rate ≈ 2 * angle_vector * gains
     Eigen::Vector3f rate_setpoint;
-    rate_setpoint.x() = 2.0f * q_error.x() * _config.p_gains.x();  // roll rate
-    rate_setpoint.y() = 2.0f * q_error.y() * _config.p_gains.y();  // pitch rate
-    rate_setpoint.z() = 2.0f * q_error.z() * _config.p_gains.z();  // yaw rate
+    rate_setpoint.x() = 2.0f * q_error.x() * _config.p_gains.x();
+    rate_setpoint.y() = 2.0f * q_error.y() * _config.p_gains.y();
+    rate_setpoint.z() = stick_yaw * _config.max_yaw_rate;
 
-    // Handle double cover: if w < 0, negate the error vector
-    // This ensures we take the shortest rotation path
     if (q_error.w() < 0.0f) {
-      rate_setpoint = -rate_setpoint;
+      rate_setpoint.x() = -rate_setpoint.x();
+      rate_setpoint.y() = -rate_setpoint.y();
     }
 
-    // Step 10: Apply rate limiting
-    rate_setpoint = rate_setpoint.cwiseMin(_config.max_rate).cwiseMax(-_config.max_rate);
+    rate_setpoint.x() = std::clamp(rate_setpoint.x(), -_config.max_rate, _config.max_rate);
+    rate_setpoint.y() = std::clamp(rate_setpoint.y(), -_config.max_rate, _config.max_rate);
+    rate_setpoint.z() = std::clamp(rate_setpoint.z(), -_config.max_yaw_rate, _config.max_yaw_rate);
 
     return rate_setpoint;
   }
@@ -385,31 +333,5 @@ private:
     const Eigen::Vector3f& z_target)
   {
     return Eigen::Quaternionf::FromTwoVectors(z_current, z_target).normalized();
-  }
-
-  /**
-   * @brief Extract the yaw angle from a quaternion
-   *
-   * For quaternion [w, x, y, z] (Hamilton convention), the yaw angle is:
-   * yaw = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
-   *
-   * This extracts the pure rotation around the Z axis.
-   */
-  static float extractYawAngle(const Eigen::Quaternionf& q)
-  {
-    const float w = q.w(), x = q.x(), y = q.y(), z = q.z();
-    return std::atan2(2.0f * (w*z + x*y), 1.0f - 2.0f * (y*y + z*z));
-  }
-
-  /**
-   * @brief Create a pure Z-axis rotation quaternion
-   *
-   * This creates a quaternion representing rotation around the Z axis only.
-   */
-  static Eigen::Quaternionf yawRotationQuaternion(float yaw_angle)
-  {
-    return Eigen::Quaternionf(
-      Eigen::AngleAxisf(yaw_angle, Eigen::Vector3f::UnitZ())
-    ).normalized();
   }
 };
