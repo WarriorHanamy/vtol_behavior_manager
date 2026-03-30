@@ -13,7 +13,6 @@ model:
   num_layers: 1
   tensorrt:
     enabled: true
-    engine_path: "${oc.env:INFER_WORKSPACE}/src/neural_manager/neural_pos_ctrl/models/policy_no_thrdyn.trt"
     auto_build: false
     max_batch_size: 1
     fp16: true

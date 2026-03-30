@@ -9,15 +9,19 @@ docker-ros2-build:
 	@docker build -f dockerfiles/ros2.dockerfile -t ros2-vtol:latest .
 
 # =============================================================================
-# Build PX4 (no-cache)
+# Build PX4
 # =============================================================================
 
 docker-px4-build:
-	@git submodule update --init --recursive $(PX4_SUBMODULE_PATH)
+	@git $(GIT_SAFE_FLAGS) submodule update --init --recursive $(PX4_SUBMODULE_PATH)
 	@echo ">>> Tagging px4-deps as px4_deps..."
 	@docker tag px4-deps:jammy-harmonic px4_deps:latest
-	@echo ">>> Building px4-gazebo image without cache..."
-	@docker build --no-cache \
+	@echo ">>> Building px4-gazebo image..."
+	@docker build $(DOCKER_BUILD_FLAGS) \
+		--build-arg PX4_GIT_URL="$(PX4_GIT_URL)" \
+		--build-arg PX4_GIT_REF="$(PX4_GIT_REF)" \
+		--build-arg PX4_GIT_COMMIT="$(PX4_GIT_COMMIT)" \
+		--build-arg PX4_GIT_TAG="$(PX4_GIT_TAG)" \
 		-f dockerfiles/px4-gazebo.dockerfile \
 		-t px4-gazebo-harmonic-vtol:v1 .
 
@@ -28,6 +32,12 @@ docker-px4-build:
 VTOL_OFFLOAD_CONTAINER ?= vtol-build-offload
 VTOL_OFFLOAD_IMAGE ?= ros2-vtol:latest
 PX4_SUBMODULE_PATH := deps/PX4-Neupilot
+GIT_SAFE_FLAGS := -c safe.directory=$(CURDIR) -c safe.directory=$(abspath $(PX4_SUBMODULE_PATH))
+DOCKER_BUILD_FLAGS ?=
+PX4_GIT_URL ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" remote get-url origin 2>/dev/null)
+PX4_GIT_REF ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'main')
+PX4_GIT_COMMIT ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" rev-parse HEAD 2>/dev/null)
+PX4_GIT_TAG ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" describe --exclude ext/* --always --tags --dirty 2>/dev/null)
 
 docker-offload-build:
 	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
@@ -103,8 +113,8 @@ MSG_SUBMODULE_PATH := src/px4_msgs/msg
 sync-msg-submodule:
 	@echo ">>> Resolving msg submodule info..."; \
 	if [ -d "$(PX4_SUBMODULE_PATH)" ]; then \
-		MSG_COMMIT=$$(git -C "$(PX4_SUBMODULE_PATH)" submodule status -- msg | sed 's/^[-+ ]//' | cut -d' ' -f1); \
-		MSG_URL=$$(git -C "$(PX4_SUBMODULE_PATH)" config -f .gitmodules submodule.msg.url); \
+		MSG_COMMIT=$$(git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" submodule status -- msg | sed 's/^[-+ ]//' | cut -d' ' -f1); \
+		MSG_URL=$$(git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" config -f .gitmodules submodule.msg.url); \
 		echo ">>> Using local PX4 submodule metadata from $(PX4_SUBMODULE_PATH)"; \
 	else \
 		echo ">>> Local PX4 submodule not found, falling back to gh api..."; \

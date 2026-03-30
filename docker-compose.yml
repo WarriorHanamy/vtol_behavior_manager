@@ -63,11 +63,9 @@ services:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
       - ROS_DISTRO=humble
-      - INFER_WORKSPACE=/home/ros/ros2_ws
     volumes:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - /home/rec/server/policies:/home/ros/policies:ro
     stdin_open: true
     tty: true
     command: bash
@@ -127,23 +125,4 @@ services:
               count: all
               capabilities: [gpu]
 
-  # Log Streamer - FastAPI SSE log streaming service
-  log_streamer:
-    build:
-      context: .
-      dockerfile: dockerfiles/log-streamer.dockerfile
-    image: log-streamer:latest
-    restart: unless-stopped
-    network_mode: host
-    # Mount host journal for user service logs
-    volumes:
-      - /run/log/journal:/run/log/journal:ro
-      - /var/log/journal:/var/log/journal:ro
-    environment:
-      - PYTHONUNBUFFERED=1
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
+
