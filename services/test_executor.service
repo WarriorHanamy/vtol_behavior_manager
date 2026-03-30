@@ -1,7 +1,10 @@
 [Unit]
 Description=Test Executor Service (runs inside ros2 container)
+Documentation=Executes test_neural_executor launch file. Stops automatically if ros2 container exits.
+
+BindsTo=ros2-liveness.service
+After=ros2-liveness.service
 PartOf=sim-session.service
-After=sim-session.service
 Before=test.target
 
 [Service]
@@ -43,8 +46,7 @@ docker exec -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bas
 cd /home/ros/ros2_ws && \
 source install/setup.bash && \
 ros2 launch neural_executor test_neural_executor.launch.py"'
-Restart=on-failure
-RestartSec=5
+Restart=no
 
 # Security settings for user service
 NoNewPrivileges=true

@@ -1,7 +1,10 @@
 [Unit]
 Description=Neural Inference Service (runs inside ros2 container)
+Documentation=Executes neural_infer.py. Stops automatically if ros2 container exits.
+
+BindsTo=ros2-liveness.service
+After=ros2-liveness.service neural_executor.service
 PartOf=sim-session.service
-After=sim-session.service neural_executor.service
 Before=neural.target
 
 [Service]
@@ -20,8 +23,7 @@ docker exec -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bas
 cd /home/ros/ros2_ws && \
 source install/setup.bash && \
 python3 src/neural_manager/neural_inference/neural_infer.py"'
-Restart=on-failure
-RestartSec=5
+Restart=no
 
 # Security settings for user service
 NoNewPrivileges=true

@@ -91,6 +91,12 @@ public:
         break;
 
       case State::Position:
+        if (!_vehicle_status->lastValid()) {
+          RCLCPP_INFO(node().get_logger(), "State: Position - waiting for vehicle status");
+          _mavlink_logger->notice("[Neural] Waiting for vehicle status");
+          break;
+        }
+
         if (_vehicle_status->navState() != POSCTL_NAV_STATE) {
           RCLCPP_INFO(node().get_logger(), "State: Position - switching to Position mode");
           _mavlink_logger->info("[Neural] Switching to Position mode");

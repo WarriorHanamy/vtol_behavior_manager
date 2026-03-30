@@ -1,21 +1,39 @@
 [Unit]
-Description=VTOL Simulation Session (tmux + docker compose)
-After=network-online.target
+Description=VTOL Simulation Session (Docker Compose)
+Documentation=Manages px4, qgc, and ros2 containers lifecycle
+
+After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=oneshot
+RemainAfterExit=yes
 WorkingDirectory=/home/rec/server/vtol-interface
 
-ExecStart=/usr/bin/tmux new-session -d -s vtol-sim -x 200 -y 50 \
-  'docker compose up -d --remove-orphans px4 qgc && docker compose attach ros2; docker compose down --remove-orphans; tmux kill-session -t vtol-sim'
+ExecStart=/bin/sh -c '\
+  echo "========================================"; \
+  echo "Starting VTOL Simulation Session"; \
+  echo "========================================"; \
+  docker compose up -d --remove-orphans px4 qgc ros2 && \
+  echo ""; \
+  echo "✓ Containers started:"; \
+  docker compose ps --format "table {{.Name}}\t{{.Status}}"; \
+  echo ""; \
+  echo "To enter ros2 container: docker compose attach ros2"; \
+  echo "To exit container (keep running): Ctrl+P Ctrl+Q"; \
+  echo "========================================"'
 
-ExecStop=/usr/bin/tmux kill-session -t vtol-sim 2>/dev/null || true
-ExecStopPost=/bin/bash -c 'docker compose down 2>/dev/null || true'
-ExecStopPost=/bin/bash -c 'systemctl --user stop neural.target test.target 2>/dev/null || true'
-
-Restart=on-failure
-RestartSec=10
+ExecStop=/bin/sh -c '\
+  echo "========================================"; \
+  echo "Stopping VTOL Simulation Session"; \
+  echo "========================================"; \
+  echo "Stopping dependent services..."; \
+  systemctl --user stop neural.target test.target 2>/dev/null || true; \
+  systemctl --user stop ros2-liveness.service 2>/dev/null || true; \
+  echo "Stopping containers..."; \
+  docker compose down --remove-orphans; \
+  echo "✓ Simulation stopped"; \
+  echo "========================================"'
 
 [Install]
 WantedBy=default.target

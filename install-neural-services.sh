@@ -70,6 +70,7 @@ echo ""
 SERVICES=(
     "sim-session.service"
     "neural.target"
+    "ros2-liveness.service"
     "test.target"
     "neural_executor.service"
     "neural_infer.service"

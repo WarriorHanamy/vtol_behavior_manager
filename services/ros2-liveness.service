@@ -1,0 +1,26 @@
+[Unit]
+Description=ROS2 Container Liveness Probe
+Documentation=Checks if ros2 container is running. Stops all dependent services if container exits.
+
+After=docker.service sim-session.service
+Requires=docker.service
+PartOf=sim-session.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+ExecStart=/bin/sh -c '\
+  echo "[Liveness] Checking ros2 container..."; \
+  if ! docker ps --filter "name=ros2" --format "{{.Names}}" | grep -q .; then \
+    echo "[Liveness] Error: ros2 container not running" >&2; \
+    exit 1; \
+  fi; \
+  echo "[Liveness] ros2 container is running ✓"'
+
+ExecStop=/bin/sh -c 'echo "[Liveness] Liveness probe stopped"'
+
+Restart=no
+
+[Install]
+WantedBy=default.target
