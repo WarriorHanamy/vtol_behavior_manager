@@ -52,7 +52,8 @@ class NeuralControlNode(rclpy.node.Node):
     self._policy_actor = self._create_policy_actor()
 
     self._action_processor = ActionPostProcessor(
-      max_acc=self.cfg.control.max_acc,
+      min_thrust_g=self.cfg.control.min_thrust_g,
+      max_thrust_g=self.cfg.control.max_thrust_g,
       max_roll_pitch_rate=self.cfg.control.max_roll_pitch_rate,
       max_yaw_rate=self.cfg.control.max_yaw_rate,
       node_logger=self.get_logger(),
@@ -74,12 +75,18 @@ class NeuralControlNode(rclpy.node.Node):
     )
 
     log_interval = getattr(self.cfg.debug, "log_interval", 100)
+    enable_features = getattr(self.cfg.debug, "enable_features", False)
+    features_log_file = getattr(self.cfg.debug, "features_log_file", "/tmp/neural_features.log")
+
     self._inference_logger = InferenceLogger(
       logger=self.get_logger(),
       log_interval=log_interval,
       enable_raw_input=True,
       enable_output=True,
+      enable_features=enable_features,
+      features_log_file=features_log_file,
     )
+    self._feature_specs = self._feature_provider.get_feature_specs()
 
     self._last_action = np.zeros(4, dtype=np.float32)
     self._step_count = 0
@@ -130,6 +137,7 @@ class NeuralControlNode(rclpy.node.Node):
     )
 
     obs = self._feature_provider.get_all_features()
+    self._inference_logger.log_features(obs, self._feature_specs)
 
     raw_action = self._policy_actor(obs)
 

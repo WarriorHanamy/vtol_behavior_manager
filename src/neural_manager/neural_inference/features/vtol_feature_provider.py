@@ -221,6 +221,67 @@ class VtolFeatureProvider(FeatureProviderBase):
     """
     return self._last_action
 
+  def get_to_target_b_flu(self) -> np.ndarray:
+    """
+    Get target error vector in FLU body frame.
+
+    Computes: target_pos - vehicle_pos in FLU frame
+
+    Returns:
+        3D numpy array representing target error in FLU frame
+    """
+    error_ned = self._target_pos_ned - self._position_ned
+    error_frd = self._ned_to_frd(self._quat, error_ned)
+    error_flu = self._frd_to_flu(error_frd)
+    return error_flu
+
+  def get_enu_quat_flu(self) -> np.ndarray:
+    """
+    Get orientation quaternion in ENU FLU frame.
+
+    Transforms quaternion from NED FRD frame to ENU FLU frame.
+
+    Returns:
+        4D numpy array [w, x, y, z] quaternion in ENU FLU frame
+    """
+    q_w, q_x, q_y, q_z = self._quat
+    enu_quat = np.array([q_w, -q_y, q_x, -q_z], dtype=np.float32)
+    return enu_quat
+
+  def get_vel_b_flu(self) -> np.ndarray:
+    """
+    Get linear velocity in FLU body frame.
+
+    Computes: Transform linear velocity from NED world frame to FLU body frame
+
+    Returns:
+        3D numpy array in FLU frame
+    """
+    velocity_frd = self._ned_to_frd(self._quat, self._velocity_ned)
+    velocity_flu = self._frd_to_flu(velocity_frd)
+    return velocity_flu
+
+  def get_ang_vel_b_flu(self) -> np.ndarray:
+    """
+    Get angular velocity in FLU body frame.
+
+    Computes: Transform angular velocity from FRD to FLU
+
+    Returns:
+        3D numpy array in FLU frame
+    """
+    ang_vel_flu = self._frd_to_flu(self._ang_vel_frd)
+    return ang_vel_flu
+
+  def get_last_raw_action(self) -> np.ndarray:
+    """
+    Get the buffered last raw action vector (semantic-agnostic).
+
+    Returns:
+        4D numpy array representing raw network output
+    """
+    return self._last_action
+
   def get_raw_input(self) -> dict:
     """
     Get raw sensor data before feature transformation.

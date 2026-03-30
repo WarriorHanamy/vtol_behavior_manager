@@ -329,6 +329,15 @@ class FeatureProviderBase:
 
     return feature
 
+  def get_feature_specs(self) -> list[FeatureSpec]:
+    """
+    Get feature specifications list.
+
+    Returns:
+        list of FeatureSpec objects
+    """
+    return self._metadata.copy()
+
   def get_validation_report(self) -> list[FeatureValidationResult]:
     """
     Get validation results for programmatic access.

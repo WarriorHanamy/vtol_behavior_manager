@@ -32,13 +32,14 @@ class ActionPostProcessor:
 
   def __init__(
     self,
-    max_acc: float = 19.62,
+    min_thrust_g: float = 0.0,
+    max_thrust_g: float = 2.0,
     max_roll_pitch_rate: float = 1.0,
     max_yaw_rate: float = 1.0,
     node_logger=None,
     acc_fixed: bool = False,
-    use_tanh_activation: bool = True,
-    enable_action_clipping: bool = False,
+    use_tanh_activation: bool = False,
+    enable_action_clipping: bool = True,
     action_limits: dict | None = None,
     print_control_commands: bool = False,
     ros_node: rclpy.node.Node | None = None,
@@ -47,18 +48,20 @@ class ActionPostProcessor:
     Initialize the action post-processor.
 
     Args:
-        max_acc: Maximum acceleration in m/s^2 (default 2*g)
+        min_thrust_g: Minimum thrust in g (default 0.0)
+        max_thrust_g: Maximum thrust in g (default 2.0)
         max_roll_pitch_rate: Maximum roll/pitch angular rate in rad/s
         max_yaw_rate: Maximum yaw angular rate in rad/s
         node_logger: ROS2 node logger for debugging
         acc_fixed: Whether to use fixed thrust acceleration
-        use_tanh_activation: Whether to apply tanh activation (default True, matching training)
-        enable_action_clipping: Whether to clip actions to [-1, 1] range (deprecated, use tanh instead)
+        use_tanh_activation: Whether to apply tanh activation
+        enable_action_clipping: Whether to clip actions to [-1, 1] range
         action_limits: Dictionary containing action limit values
         print_control_commands: Whether to print detailed control command information
         ros_node: ROS2 node for publishing angular rate topics (optional)
     """
-    self._max_acc = float(max_acc)
+    self._min_thrust_g = float(min_thrust_g)
+    self._max_thrust_g = float(max_thrust_g)
     self._max_roll_pitch_rate = float(max_roll_pitch_rate)
     self._max_yaw_rate = float(max_yaw_rate)
     self._logger = node_logger
@@ -198,10 +201,13 @@ class ActionPostProcessor:
     """
     Convert normalized thrust to acceleration in m/s^2.
 
-    PX4 thrust_axis_acc_sp convention: down is positive, up is negative.
-    - thrust_raw = -1 → thrust_acc = -max_acc (max upward)
-    - thrust_raw =  0 → thrust_acc = 0
-    - thrust_raw = +1 → thrust_acc = +max_acc (max downward)
+    Follows training convention (actions_cl_torque.py):
+    - Map [-1, 1] → [min_thrust_g, max_thrust_g]
+    - thrust_raw = -1 → 0g (falling)
+    - thrust_raw =  0 → 1g (hover)
+    - thrust_raw = +1 → 2g (climbing)
+
+    PX4 thrust_axis_acc_sp: down-positive, so negate at the end.
 
     Args:
         thrust_raw: Normalized thrust value [-1, 1] (after tanh activation)
@@ -209,10 +215,12 @@ class ActionPostProcessor:
     Returns:
         Thrust acceleration in m/s^2 (down positive, up negative)
     """
+    G = 9.81
     if self._acc_fixed:
-      return float(self._max_acc / 2.0)
+      return float(-G)
 
-    thrust_acc = thrust_raw * self._max_acc
+    thrust_g = ((thrust_raw + 1.0) / 2.0) * (self._max_thrust_g - self._min_thrust_g) + self._min_thrust_g
+    thrust_acc = -thrust_g * G
 
     return float(thrust_acc)
 
@@ -226,7 +234,8 @@ class ActionPostProcessor:
     return {
       "min": self._action_limits["min"],
       "max": self._action_limits["max"],
-      "max_acc": self._max_acc,
+      "min_thrust_g": self._min_thrust_g,
+      "max_thrust_g": self._max_thrust_g,
       "max_roll_pitch_rate": self._max_roll_pitch_rate,
       "max_yaw_rate": self._max_yaw_rate,
       "acc_fixed": self._acc_fixed,
@@ -363,13 +372,11 @@ class ActionPostProcessor:
         Dictionary containing processor configuration and state
     """
     return {
-      "max_acc": self._max_acc,
+      "min_thrust_g": self._min_thrust_g,
+      "max_thrust_g": self._max_thrust_g,
       "max_roll_pitch_rate": self._max_roll_pitch_rate,
       "max_yaw_rate": self._max_yaw_rate,
       "acc_fixed": self._acc_fixed,
-      "use_tanh_activation": self._use_tanh_activation,
-      "action_clipping_enabled": self._enable_action_clipping,
-      "action_limits": self._action_limits,
       "last_action": self._last_action.tolist(),
     }
 

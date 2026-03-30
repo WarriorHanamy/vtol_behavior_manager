@@ -1,4 +1,4 @@
-.PHONY: list docker-offload-build docker-px4-build docker-ros2-build docker-shell
+.PHONY: list docker-offload-build docker-px4-build docker-ros2-build docker-shell docker-neural-launch
 
 # =============================================================================
 # Build ROS2 Image (layered by change frequency)
@@ -18,8 +18,6 @@ docker-px4-build:
 	@docker tag px4-deps:jammy-harmonic px4_deps:latest
 	@echo ">>> Building px4-gazebo image..."
 	@docker build $(DOCKER_BUILD_FLAGS) \
-		--build-arg PX4_GIT_URL="$(PX4_GIT_URL)" \
-		--build-arg PX4_GIT_REF="$(PX4_GIT_REF)" \
 		--build-arg PX4_GIT_COMMIT="$(PX4_GIT_COMMIT)" \
 		--build-arg PX4_GIT_TAG="$(PX4_GIT_TAG)" \
 		-f dockerfiles/px4-gazebo.dockerfile \
@@ -176,6 +174,10 @@ sim-attach:
 
 docker-shell:
 	@docker compose exec ros2 bash -lc "source /opt/ros/humble/setup.bash && source /home/ros/ros2_ws/install/setup.bash && exec bash"
+
+docker-neural-launch:
+	@echo ">>> Launching neural_executor frontend in ros2 container..."
+	@docker compose exec ros2 bash -lc "source /opt/ros/humble/setup.bash && source /home/ros/ros2_ws/install/setup.bash && ros2 launch neural_executor neural_executor.launch.py"
 
 # =============================================================================
 # Neural Services Management (group-based)

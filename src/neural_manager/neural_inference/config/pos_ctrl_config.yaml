@@ -31,12 +31,13 @@ control:
   update_period: 0.01
   timeout_ms: 50.0
   control_mode: "acc_rates"
-  max_acc: 19.62
+  min_thrust_g: 0.0
+  max_thrust_g: 2.0
   max_roll_pitch_rate: 3.0
   max_yaw_rate: 1.0
   action_processing:
-    use_tanh_activation: true
-    enable_action_clipping: false
+    use_tanh_activation: false
+    enable_action_clipping: true
 
 safety:
   enable_failure_detection: true
@@ -49,3 +50,6 @@ debug:
   print_observation: true
   print_control: true
   acc_fixed: false
+  log_interval: 1
+  enable_features: true
+  features_log_file: /tmp/neural_features.log
