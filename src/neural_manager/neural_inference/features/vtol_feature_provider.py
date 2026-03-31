@@ -21,6 +21,7 @@ from rclpy.qos import qos_profile_sensor_data
 from neural_manager.neural_inference.math_utils import (
   canonicalize_quat_w_positive,
   frd_flu_rotate,
+  ned_enu_rotate,
   ned_quat_frd_to_enu_quat_flu,
   ned_to_frd_rotate,
 )
@@ -177,6 +178,19 @@ class VtolFeatureProvider(FeatureProviderBase):
     frd_error = ned_to_frd_rotate(self._ned_quat_frd, ned_error)
     flu_error = frd_flu_rotate(frd_error)
     return flu_error
+
+  def get_enu_to_target(self) -> np.ndarray:
+    """
+    Get target error vector in ENU world frame.
+
+    Computes: target_position - vehicle_position in ENU frame
+
+    Returns:
+        3D numpy array representing target error in ENU frame [e, n, -d]
+    """
+    ned_error = self._ned_target_position - self._ned_position
+    enu_error = ned_enu_rotate(ned_error)
+    return enu_error
 
   def get_flu_grav_dir(self) -> np.ndarray:
     """

@@ -1,18 +1,11 @@
 .PHONY: list docker-offload-build docker-px4-build docker-ros2-build docker-shell docker-neural-launch
 
-# =============================================================================
-# Build ROS2 Image (layered by change frequency)
-# =============================================================================
-
-docker-ros2-build:
-	@echo ">>> Building ros2-vtol image (layered: px4_msgs -> px4-ros2 -> neural_manager)..."
-	@docker build -f dockerfiles/ros2.dockerfile -t ros2-vtol:latest .
 
 # =============================================================================
 # Build PX4
 # =============================================================================
 
-docker-px4-build:
+docker-build-px4:
 	@git $(GIT_SAFE_FLAGS) submodule update --init --recursive $(PX4_SUBMODULE_PATH)
 	@echo ">>> Tagging px4-deps as px4_deps..."
 	@docker tag px4-deps:jammy-harmonic px4_deps:latest
@@ -37,7 +30,7 @@ PX4_GIT_REF ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" symbolic
 PX4_GIT_COMMIT ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" rev-parse HEAD 2>/dev/null)
 PX4_GIT_TAG ?= $(shell git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" describe --exclude ext/* --always --tags --dirty 2>/dev/null)
 
-docker-offload-build:
+docker-offload-ros2BuildTask:
 	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
 	@mkdir -p build
 	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
@@ -46,57 +39,6 @@ docker-offload-build:
 		"source /opt/ros/humble/setup.bash && \
 		 source /home/ros/ros2_ws/install/setup.bash && \
 		 colcon build --packages-select neural_executor 2>&1" | tee build/compile.log
-	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
-	@echo ">>> Build log: build/compile.log"
-
-.PHONY: docker-build-px4-msgs docker-build-px4-ros2 docker-build-neural docker-build-all
-
-docker-build-px4-msgs:
-	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
-	@mkdir -p build
-	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
-	@docker cp src/px4_msgs $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
-	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
-		"cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && \
-		 source /opt/ros/humble/setup.bash && \
-		 colcon build --packages-select px4_msgs 2>&1" | tee build/compile.log
-	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
-	@echo ">>> Build log: build/compile.log"
-
-docker-build-px4-ros2:
-	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
-	@mkdir -p build
-	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
-	@docker cp src/px4_msgs $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
-	@docker cp src/px4-ros2-interface-lib $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
-	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
-		"cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && \
-		 source /opt/ros/humble/setup.bash && \
-		 colcon build --packages-select px4_msgs px4_ros2_cpp 2>&1" | tee build/compile.log
-	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
-	@echo ">>> Build log: build/compile.log"
-
-docker-build-neural:
-	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
-	@mkdir -p build
-	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
-	@docker cp src/neural_manager $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
-	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
-		"source /opt/ros/humble/setup.bash && \
-		 source /home/ros/ros2_ws/install/setup.bash && \
-		 colcon build --packages-select neural_executor 2>&1" | tee build/compile.log
-	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
-	@echo ">>> Build log: build/compile.log"
-
-docker-build-all:
-	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
-	@mkdir -p build
-	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
-	@docker cp src/. $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
-	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
-		"cp -r /home/ros/ros2_ws/src/px4_msgs/msg/versioned/* /home/ros/ros2_ws/src/px4_msgs/msg/ && \
-		 source /opt/ros/humble/setup.bash && \
-		 colcon build 2>&1" | tee build/compile.log
 	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
 	@echo ">>> Build log: build/compile.log"
 
@@ -194,36 +136,6 @@ install:
 	fi
 	@./install-neural-services.sh
 
-# Start Group A (neural_executor + neural_infer)
-neural:
-	@echo ">>> Switching to Neural Group A..."
-	@systemctl --user isolate neural.target
-
-# Start Group B (test_executor with joystick)
-test:
-	@echo ">>> Switching to Test Group B..."
-	@systemctl --user isolate test.target
-
-# Legacy targets (kept for compatibility)
-neural-start:
-	@echo ">>> Starting neural services (Group A)..."
-	@systemctl --user isolate neural.target
-
-neural-stop:
-	@echo ">>> Stopping neural services..."
-	@systemctl --user stop neural.target test.target 2>/dev/null || true
-
-neural-status:
-	@echo ">>> Checking service status..."
-	@echo ""
-	@echo "=== Sim Session ==="
-	@systemctl --user status sim-session.service --no-pager || true
-	@echo ""
-	@echo "=== Neural Target (Group A) ==="
-	@systemctl --user status neural.target --no-pager || true
-	@echo ""
-	@echo "=== Test Target (Group B) ==="
-	@systemctl --user status test.target --no-pager || true
 
 POLICIES_SRC ?= /home/rec/server/policies
 
@@ -260,21 +172,6 @@ neural-infer: sync-policies
 logs:
 	@echo ">>> Streaming all service logs (press Ctrl+C to exit)..."
 	@journalctl --user -u sim-session.service -u neural_executor.service -u neural_infer.service -u test_executor.service -f
-
-logs-web:
-	@echo ">>> Log streamer web endpoints (requires log_streamer service to be running):"
-	@echo ""
-	@echo "Neural Executor logs:   http://localhost:8000/logs/neural_executor"
-	@echo "Neural Inference logs:  http://localhost:8000/logs/neural_infer"
-	@echo "Merged logs:            http://localhost:8000/logs/merged"
-	@echo "Service status:         http://localhost:8000/status"
-	@echo "Health check:           http://localhost:8000/health"
-	@echo ""
-	@echo "To start log_streamer service:"
-	@echo "  docker compose up -d log_streamer"
-	@echo ""
-	@echo "To stop log_streamer service:"
-	@echo "  docker compose stop log_streamer"
 
 # =============================================================================
 # Help

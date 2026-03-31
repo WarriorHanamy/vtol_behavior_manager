@@ -34,7 +34,7 @@ public:
     _odometry_position = std::make_shared<px4_ros2::OdometryLocalPosition>(*this);
 
     node().declare_parameter("geofence_xy_limit", 5.0f);
-    node().declare_parameter("geofence_z_limit", 0.5f);
+    node().declare_parameter("geofence_z_limit", 2.0f);
     node().declare_parameter("neural_mode_timeout", 0.1f);
     _geofence_xy_limit = node().get_parameter("geofence_xy_limit").as_double();
     _geofence_z_limit = node().get_parameter("geofence_z_limit").as_double();
@@ -96,7 +96,7 @@ private:
   Eigen::Vector3f _startup_position{0, 0, 0};
   bool _startup_position_set{false};
   float _geofence_xy_limit{5.0f};
-  float _geofence_z_limit{0.5f};
+  float _geofence_z_limit{2.0f};
   float _neural_mode_timeout{0.1f};
 
   rclcpp::Subscription<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr _neural_acc_rates_ctrl_sub;
