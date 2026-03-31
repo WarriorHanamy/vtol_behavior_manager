@@ -22,6 +22,9 @@ class NeuralExecutor : public px4_ros2::ModeExecutorBase
   static constexpr double STILL_WAIT_TIME_S = 3.0;
   static constexpr double NEURAL_CONTROL_TIMEOUT_S = 0.5;
   static constexpr double NEURAL_CONTROL_WAIT_S = 2.0;
+  static constexpr double TARGET_OFFSET_X = -0.5;
+  static constexpr double TARGET_OFFSET_Y = -0.5;
+  static constexpr double TARGET_OFFSET_Z = -0.5;
 
 public:
   enum class State
@@ -297,9 +300,9 @@ private:
     auto pos = _odometry_position->positionNed();
     px4_msgs::msg::TrajectorySetpoint msg;
     msg.timestamp = node().get_clock()->now().nanoseconds() / 1000;
-    msg.position[0] = pos.x();
-    msg.position[1] = pos.y();
-    msg.position[2] = pos.z();
+    msg.position[0] = pos.x() + TARGET_OFFSET_X;
+    msg.position[1] = pos.y() + TARGET_OFFSET_Y;
+    msg.position[2] = pos.z() + TARGET_OFFSET_Z;
     msg.velocity[0] = NAN;
     msg.velocity[1] = NAN;
     msg.velocity[2] = NAN;
