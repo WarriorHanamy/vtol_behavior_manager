@@ -16,6 +16,7 @@ dev = ["ruff"]
 
 [project.scripts]
 debug-px4 = "debug_px4.cli:main"
+entrypoint = "debug_px4.entrypoint:main"
 demo-fake-publisher = "demos.fake_publisher:main"
 demo-mocap-logger = "demos.mocap_logger:main"
 demo-mocap-reader = "demos.mocap_reader:main"
