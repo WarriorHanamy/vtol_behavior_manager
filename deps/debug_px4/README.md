@@ -13,6 +13,9 @@ uv run debug-px4 -t neupilot/debug/acc_rates_control
 # Subscribe with real-time plot
 uv run debug-px4 -t neupilot/debug/acc_rates_control --plot
 
+# Record standard MCAP with JSON messages
+uv run debug-px4 -t neupilot/debug/acc_rates_control --mcap-output log.mcap
+
 # Connect to specific zenoh router
 uv run debug-px4 -t neupilot/debug/acc_rates_control -m client -l tcp/127.0.0.1:7447 --plot
 ```

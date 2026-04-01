@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
   "eclipse-zenoh>=1.0.0",
   "matplotlib",
+  "mcap",
   "numpy",
 ]
 
@@ -15,6 +16,9 @@ dev = ["ruff"]
 
 [project.scripts]
 debug-px4 = "debug_px4.cli:main"
+demo-fake-publisher = "demos.fake_publisher:main"
+demo-mocap-logger = "demos.mocap_logger:main"
+demo-mocap-reader = "demos.mocap_reader:main"
 
 [tool.ruff]
 line-length = 120
@@ -23,6 +27,9 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = ["E402", "F841", "F401"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/debug_px4", "demos"]
 
 [build-system]
 requires = ["hatchling"]

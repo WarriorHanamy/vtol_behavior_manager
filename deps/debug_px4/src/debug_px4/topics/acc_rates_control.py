@@ -1,5 +1,6 @@
+import json
 import struct
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Self
 
 
@@ -66,3 +67,47 @@ class AccRatesControlHandler:
             "thrust_body_z_sp",
             "thrust_bias",
         ]
+
+    def get_json_schema(self) -> bytes:
+        return json.dumps(
+            {
+                "type": "object",
+                "properties": {
+                    "timestamp": {"type": "integer"},
+                    "thrust_axis_specific_force_sp": {"type": "number"},
+                    "thrust_axis_specific_force": {"type": "number"},
+                    "hover_thrust_estimate": {"type": "number"},
+                    "rates_sp": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 3,
+                    },
+                    "thrust_body_z_ff": {"type": "number"},
+                    "thrust_body_z_feedback": {"type": "number"},
+                    "thrust_body_z_sp": {"type": "number"},
+                    "thrust_bias": {"type": "number"},
+                    "hte_valid": {"type": "boolean"},
+                    "hte_active": {"type": "boolean"},
+                },
+                "required": [
+                    "timestamp",
+                    "thrust_axis_specific_force_sp",
+                    "thrust_axis_specific_force",
+                    "hover_thrust_estimate",
+                    "rates_sp",
+                    "thrust_body_z_ff",
+                    "thrust_body_z_feedback",
+                    "thrust_body_z_sp",
+                    "thrust_bias",
+                    "hte_valid",
+                    "hte_active",
+                ],
+            }
+        ).encode("utf-8")
+
+    def encode_json(self, data: bytes) -> bytes:
+        msg = self.decode(data)
+        payload = asdict(msg)
+        payload["rates_sp"] = list(msg.rates_sp)
+        return json.dumps(payload).encode("utf-8")
