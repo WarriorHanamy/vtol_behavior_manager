@@ -76,14 +76,6 @@ sync-msg-submodule:
 
 .PHONY: sim sim-kill sim-status sim-attach
 
-# Legacy tmux-based sim (kept for reference)
-sim-legacy: sim-kill
-	@which tmux >/dev/null || { echo "Error: tmux not installed"; exit 1; }
-	@echo ">>> Starting simulation session: $(TMUX_SESSION)"
-	tmux new-session -d -s $(TMUX_SESSION) -n sim -x 200 -y 50
-	tmux send-keys -t $(TMUX_SESSION) 'docker compose up -d px4 qgc && docker compose attach ros2; docker compose down; tmux kill-session -t $(TMUX_SESSION)' C-m
-	tmux attach -t $(TMUX_SESSION)
-
 # New systemd-based sim session
 sim:
 	@echo ">>> Granting X11 access to docker..."
@@ -117,11 +109,6 @@ sim-attach:
 docker-shell:
 	@docker compose exec ros2 bash -lc "source /opt/ros/humble/setup.bash && source /home/ros/ros2_ws/install/setup.bash && exec bash"
 
-docker-neural-launch:
-	@echo ">>> Launching neural_executor frontend in ros2 container..."
-	@docker compose exec ros2 bash -lc "source /opt/ros/humble/setup.bash && source /home/ros/ros2_ws/install/setup.bash && ros2 launch neural_executor neural_executor.launch.py"
-
-# =============================================================================
 # Neural Services Management (group-based)
 # =============================================================================
 
@@ -168,10 +155,6 @@ neural-infer: sync-policies
 	echo ">>> Syncing src to container..."; \
 	docker cp src/. "$$CONTAINER":/home/ros/ros2_ws/src/; \
 	docker exec -i -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer"
-
-logs:
-	@echo ">>> Streaming all service logs (press Ctrl+C to exit)..."
-	@journalctl --user -u sim-session.service -u neural_executor.service -u neural_infer.service -u test_executor.service -f
 
 # =============================================================================
 # Help

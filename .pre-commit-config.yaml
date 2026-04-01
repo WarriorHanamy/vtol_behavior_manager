@@ -19,4 +19,4 @@ repos:
         args:
           - --remove-header
           - --license-filepath
-          - LICENSE
+          - .github/LICENSE

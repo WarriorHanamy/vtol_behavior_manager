@@ -80,7 +80,6 @@ class NeuralControlNode(rclpy.node.Node):
     self._inference_logger = InferenceLogger(
       logger=self.get_logger(),
       log_interval=log_interval,
-      enable_raw_input=True,
       enable_output=True,
       enable_features=enable_features,
       features_log_file=features_log_file,
@@ -108,7 +107,9 @@ class NeuralControlNode(rclpy.node.Node):
     expected_input_shape = list(self._revision_ctx.get_expected_input_shape())
     expected_output_shape = list(self._revision_ctx.get_expected_output_shape())
 
-    self.get_logger().info(f"Model shapes - input: {expected_input_shape}, output: {expected_output_shape}")
+    self.get_logger().info(
+      f"Model shapes - input: {expected_input_shape}, output: {expected_output_shape}"
+    )
 
     actor = MLPPolicyActor(
       self._revision_ctx.model_path,
@@ -124,16 +125,6 @@ class NeuralControlNode(rclpy.node.Node):
   def run_inference(self) -> None:
     """Run neural inference and publish control command."""
     self._feature_provider.update_last_action(self._last_action)
-
-    raw_input = self._feature_provider.get_raw_input()
-    self._inference_logger.log_raw_input(
-      ned_position=raw_input["ned_position"],
-      ned_velocity=raw_input["ned_velocity"],
-      ned_quat_frd=raw_input["ned_quat_frd"],
-      frd_ang_vel=raw_input["frd_ang_vel"],
-      ned_target_position=raw_input["ned_target_position"],
-      last_action=raw_input["last_action"],
-    )
 
     obs = self._feature_provider.get_all_features()
     self._inference_logger.log_features(obs, self._feature_specs)
