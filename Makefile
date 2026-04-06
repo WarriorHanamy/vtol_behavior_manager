@@ -133,6 +133,7 @@ docker-run-ros2-jetson:
 	$(DOCKER) run --rm \
 		--platform $(PLATFORM) \
 		--net=host \
+		--ipc=host \
 		--privileged \
 		-e DISPLAY=$(DISPLAY) \
 		-v /tmp/.X11-unix:/tmp/.X11-unix \
