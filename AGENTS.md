@@ -1,8 +1,12 @@
-# Development Environment
+# vtol_behavior_manager Development Guide
+
+This document provides guidelines for developing within the `vtol_behavior_manager` repository.
+
+## Development Environment
 
 The development OS is Arch Linux. ROS cannot be used natively and must run in Docker.
 
-# Build Information
+## Build Information
 
 When you need compilation logs to decide next steps:
 
@@ -10,8 +14,8 @@ When you need compilation logs to decide next steps:
 - Logs are written to `build/compile.log`
 - Do NOT attempt native `colcon build` on Arch Linux
 
-# LINT & FORMAT
-## python codes
+## LINT & FORMAT
+### python codes
 
 Run
 ```bash
@@ -20,7 +24,7 @@ uv run ruff check --fix .
 
 Never use Optional for type hinting.
 
-# Math Conventions
+## Math Conventions
 
 - This repo quaternion convention is `(w, x, y, z)`.
 - `px4_msg` quaternion convention is `(w, x, y, z)`.
