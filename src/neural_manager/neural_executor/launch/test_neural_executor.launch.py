@@ -21,12 +21,6 @@ from launch_ros.actions import Node
 def generate_launch_description():
   pkg_dir = get_package_share_directory("neural_executor")
 
-  config_file_arg = DeclareLaunchArgument(
-    "config_file",
-    default_value=os.path.join(pkg_dir, "config", "demo.yaml"),
-    description="Configuration file for demo targets and failsafe parameters",
-  )
-
   target_offset_arg = DeclareLaunchArgument(
     "target_offset",
     default_value="[0.0, 0.0, 0.0]",
@@ -34,8 +28,6 @@ def generate_launch_description():
   )
 
   common_params = {
-    "config_file": LaunchConfiguration("config_file"),
-    "neural_setpoint_timeout": 0.05,
     "use_sim_time": False,
     "target_offset": LaunchConfiguration("target_offset"),
   }
@@ -58,4 +50,4 @@ def generate_launch_description():
     ],
   )
 
-  return LaunchDescription([config_file_arg, target_offset_arg, executor_node])
+  return LaunchDescription([target_offset_arg, executor_node])
