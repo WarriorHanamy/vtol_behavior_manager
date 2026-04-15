@@ -111,6 +111,12 @@ sim-attach:
 # Build targets (simulation offload, amd64)
 # =============================================================================
 
+.PHONY: docker-offload-build-image
+
+docker-offload-build-image:
+	@echo ">>> Building offload image $(VTOL_OFFLOAD_IMAGE)..."
+	$(DOCKER) build -t $(VTOL_OFFLOAD_IMAGE) -f dockerfiles/bht.dockerfile .
+
 .PHONY: docker-offload-ros2BuildTask
 
 docker-offload-ros2BuildTask:
