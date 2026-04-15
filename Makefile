@@ -172,7 +172,7 @@ install:
 		echo "User services must be installed for the current user"; \
 		exit 1; \
 	fi
-	@./install-neural-services.sh
+	@./services/install-neural-services.sh
 
 POLICIES_SRC ?= /home/rec/server/policies
 

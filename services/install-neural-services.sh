@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Script directory (repo root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_SERVICES_DIR="${SCRIPT_DIR}/services"
+REPO_SERVICES_DIR="${SCRIPT_DIR}"
 USER_SYSTEMD_DIR="${HOME}/.config/systemd/user"
 
 # Check if we're running as root (should NOT run as root)
