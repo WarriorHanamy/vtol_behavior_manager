@@ -16,33 +16,32 @@
 using namespace std::chrono_literals;
 
 class NeuralExecutor : public px4_ros2::ModeExecutorBase {
-  static constexpr uint16_t RC_ARM_DISARM_MASK = 512;
-  static constexpr uint16_t RC_NN_CMD_MASK = 1024;
+  static constexpr uint16_t RC_ARM_DISARM_BUTTON_MASK = 512;
+  static constexpr uint16_t RC_TAKEOFF_BUTTON_MASK = 1024;
   static constexpr uint8_t POSCTL_NAV_STATE =
       px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
   static constexpr double NEURAL_CONTROL_TIMEOUT_S = 0.5;
+  static constexpr auto FLOW_DRIVE_PERIOD = 50ms;
 
 public:
-  enum class State {
-    TakingOff,
-    Position,
-    NeuralCtrl,
-  };
 
   NeuralExecutor(px4_ros2::ModeBase &owned_mode,
                  px4_ros2::ModeBase &neural_mode)
-      : ModeExecutorBase(Settings{Settings::Activation::ActivateOnlyWhenArmed},
-                         owned_mode),
+      : ModeExecutorBase(
+            Settings{}.activate(Settings::Activation::ActivateAlways),
+            owned_mode),
         _neural_mode(neural_mode),
         _context(std::make_unique<px4_ros2::Context>(node())),
         _vehicle_status(std::make_unique<px4_ros2::VehicleStatus>(*_context)),
         _manual_control_input(
-            std::make_unique<px4_ros2::ManualControlInput>(*_context, false)) {
+            std::make_unique<px4_ros2::ManualControlInput>(owned_mode, false)) {
     RCLCPP_INFO(
         node().get_logger(),
         "VehicleStatus and ManualControlInput are required dependencies");
-    _rc_poll_timer =
-        node().create_wall_timer(50ms, [this]() { handleRCInput(); });
+    // This timer is the executor's top-level flow driver. It samples RC input
+    // and advances the Position -> Takeoff/Neural -> Position flow.
+    _flow_drive_timer = node().create_wall_timer(FLOW_DRIVE_PERIOD,
+                                                 [this]() { driveFlightFlow(); });
 
     _neural_control_sub =
         node().create_subscription<px4_msgs::msg::VehicleAccRatesSetpoint>(
@@ -76,86 +75,13 @@ public:
   void onActivate() override {
     RCLCPP_INFO(node().get_logger(), "NeuralExecutor: Starting mission");
     _mavlink_logger->info("[Neural] Executor activated");
-    runState(State::TakingOff, px4_ros2::Result::Success);
+    enterPositionMode();
   }
 
   void onDeactivate(DeactivateReason reason) override {
     RCLCPP_WARN(node().get_logger(), "NeuralExecutor: Deactivated");
     _mavlink_logger->warning("[Neural] Executor deactivated");
     stopTargetPublishing();
-  }
-
-  void runState(State state, px4_ros2::Result previous_result) {
-    if (previous_result != px4_ros2::Result::Success) {
-      RCLCPP_ERROR(node().get_logger(), "State failed: %s",
-                   resultToString(previous_result));
-
-      if (state == State::TakingOff) {
-        RCLCPP_WARN(node().get_logger(),
-                    "Takeoff failed, switching to Position mode to wait for RC "
-                    "trigger");
-        _mavlink_logger->error("[Neural] Takeoff failed");
-      }
-
-      RCLCPP_WARN(node().get_logger(),
-                  "State operation failed, falling back to Position mode");
-      _mavlink_logger->warning("[Neural] Falling back to Position mode");
-      runState(State::Position, px4_ros2::Result::Success);
-      return;
-    }
-
-    switch (state) {
-    case State::TakingOff:
-      RCLCPP_INFO(node().get_logger(), "State: TakingOff");
-      _mavlink_logger->info("[Neural] Taking off");
-      takeoff([this](px4_ros2::Result result) {
-        runState(State::Position, result);
-      });
-      break;
-
-    case State::Position:
-      if (!_vehicle_status->lastValid()) {
-        RCLCPP_INFO(node().get_logger(),
-                    "State: Position - waiting for vehicle status");
-        _mavlink_logger->notice("[Neural] Waiting for vehicle status");
-        break;
-      }
-
-      startTargetPublishing();
-
-      if (_vehicle_status->navState() != POSCTL_NAV_STATE) {
-        RCLCPP_INFO(node().get_logger(),
-                    "State: Position - switching to Position mode");
-        _mavlink_logger->info("[Neural] Switching to Position mode");
-        scheduleMode(px4_ros2::ModeBase::kModeIDPosctl,
-                     [this](px4_ros2::Result pos_result) {
-                       handlePositionSwitchResult(pos_result);
-                     });
-      } else {
-        RCLCPP_INFO(node().get_logger(),
-                    "State: Position - waiting for RC trigger");
-        _mavlink_logger->notice("[Neural] Ready - waiting RC trigger");
-      }
-      break;
-
-    case State::NeuralCtrl:
-      RCLCPP_INFO(node().get_logger(), "State: NeuralCtrl");
-      _mavlink_logger->info("[Neural] Entering NeuralCtrl mode");
-      stopTargetPublishing();
-      scheduleMode(_neural_mode.id(), [this](px4_ros2::Result result) {
-        if (result == px4_ros2::Result::Success) {
-          RCLCPP_INFO(node().get_logger(),
-                      "NeuralCtrl succeeded - continuing in NeuralCtrl mode");
-          _mavlink_logger->info("[Neural] NeuralCtrl completed");
-        } else {
-          RCLCPP_WARN(node().get_logger(),
-                      "NeuralCtrl failed/interrupted, returning to Position");
-          _mavlink_logger->warning("[Neural] NeuralCtrl interrupted");
-          runState(State::Position, px4_ros2::Result::ModeFailureOther);
-        }
-      });
-      break;
-    }
   }
 
 private:
@@ -165,11 +91,11 @@ private:
   std::unique_ptr<px4_ros2::VehicleStatus> _vehicle_status;
   std::unique_ptr<px4_ros2::ManualControlInput> _manual_control_input;
 
-  rclcpp::TimerBase::SharedPtr _rc_poll_timer;
-  bool _aux1_high_last{false};
-  bool _aux1_low_last{false};
-  bool _button_pressed_last{false};
-  bool _arm_disarm_pressed_last{false};
+  rclcpp::TimerBase::SharedPtr _flow_drive_timer;
+  bool _neural_trigger_aux1_high_last{false};
+  bool _neural_trigger_aux1_low_last{false};
+  bool _takeoff_button_pressed_last{false};
+  bool _arm_disarm_button_pressed_last{false};
 
   rclcpp::Subscription<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr
       _neural_control_sub;
@@ -192,18 +118,102 @@ private:
     return elapsed < NEURAL_CONTROL_TIMEOUT_S;
   }
 
-  void handleRCInput() {
+  void enterPositionMode() {
+    startTargetPublishing();
+
+    if (_vehicle_status->lastValid() &&
+        _vehicle_status->navState() == POSCTL_NAV_STATE) {
+      RCLCPP_INFO(node().get_logger(), "Position mode active, waiting for triggers");
+      _mavlink_logger->notice("[Neural] Position mode active");
+      return;
+    }
+
+    RCLCPP_INFO(node().get_logger(), "Requesting Position mode");
+    _mavlink_logger->info("[Neural] Switching to Position mode");
+    scheduleMode(px4_ros2::ModeBase::kModeIDPosctl,
+                 [this](px4_ros2::Result result) {
+                   if (result == px4_ros2::Result::Success ||
+                       result == px4_ros2::Result::Deactivated) {
+                     return;
+                   }
+
+                   RCLCPP_ERROR(node().get_logger(),
+                                "Position mode request failed: %s",
+                                resultToString(result));
+                   _mavlink_logger->error("[Neural] Position mode switch failed");
+                 });
+  }
+
+  void startTakeoff() {
+    RCLCPP_INFO(node().get_logger(), "Starting takeoff from Position mode");
+    _mavlink_logger->info("[Neural] Taking off");
+    stopTargetPublishing();
+
+    takeoff([this](px4_ros2::Result result) {
+      if (result == px4_ros2::Result::Deactivated) {
+        RCLCPP_WARN(node().get_logger(), "Takeoff deactivated");
+        _mavlink_logger->warning("[Neural] Takeoff deactivated");
+        return;
+      }
+
+      if (result == px4_ros2::Result::Success) {
+        RCLCPP_INFO(node().get_logger(), "Takeoff completed, returning to Position");
+        _mavlink_logger->info("[Neural] Takeoff completed");
+      } else {
+        RCLCPP_ERROR(node().get_logger(),
+                     "Takeoff failed: %s, returning to Position",
+                     resultToString(result));
+        _mavlink_logger->error("[Neural] Takeoff failed");
+      }
+
+      enterPositionMode();
+    });
+  }
+
+  void startNeuralCtrl() {
+    RCLCPP_INFO(node().get_logger(), "Starting NeuralCtrl from Position mode");
+    _mavlink_logger->info("[Neural] Entering NeuralCtrl mode");
+    stopTargetPublishing();
+
+    scheduleMode(_neural_mode.id(), [this](px4_ros2::Result result) {
+      if (result == px4_ros2::Result::Deactivated) {
+        RCLCPP_WARN(node().get_logger(), "NeuralCtrl deactivated");
+        _mavlink_logger->warning("[Neural] NeuralCtrl deactivated");
+        return;
+      }
+
+      if (result == px4_ros2::Result::Success) {
+        RCLCPP_INFO(node().get_logger(),
+                    "NeuralCtrl completed, returning to Position");
+        _mavlink_logger->info("[Neural] NeuralCtrl completed");
+      } else {
+        RCLCPP_ERROR(node().get_logger(),
+                     "NeuralCtrl failed: %s, returning to Position",
+                     resultToString(result));
+        _mavlink_logger->error("[Neural] NeuralCtrl failed");
+      }
+
+      enterPositionMode();
+    });
+  }
+
+  void driveFlightFlow() {
     if (!_vehicle_status->lastValid())
       return;
     if (!_manual_control_input->isValid())
       return;
 
-    bool arm_disarm_pressed =
-        _manual_control_input->buttons() == RC_ARM_DISARM_MASK;
-    bool arm_disarm_rising = arm_disarm_pressed && !_arm_disarm_pressed_last;
+    processArmDisarmFlowStep();
+    processPositionFlowStep();
+  }
 
-    // In simulation, we use button to trigger arm or disarm
-    if (arm_disarm_rising) {
+  void processArmDisarmFlowStep() {
+    bool arm_disarm_button_pressed =
+        _manual_control_input->buttons() == RC_ARM_DISARM_BUTTON_MASK;
+    bool arm_disarm_button_rising =
+        arm_disarm_button_pressed && !_arm_disarm_button_pressed_last;
+
+    if (arm_disarm_button_rising) {
       if (isArmed()) {
         RCLCPP_INFO(node().get_logger(), "Disarming via button=512");
         _mavlink_logger->info("[Neural] Disarming via button");
@@ -226,36 +236,43 @@ private:
         });
       }
     }
-    _arm_disarm_pressed_last = arm_disarm_pressed;
+    _arm_disarm_button_pressed_last = arm_disarm_button_pressed;
+  }
 
-    // In realworld, we must be sure in position mode to trigger neural control
-    if (_vehicle_status->navState() != POSCTL_NAV_STATE)
-      return;
-
+  void processPositionFlowStep() {
+    bool takeoff_button_pressed =
+        _manual_control_input->buttons() == RC_TAKEOFF_BUTTON_MASK;
     bool aux1_high = _manual_control_input->aux1() > 0.5f;
     bool aux1_low = _manual_control_input->aux1() < -0.5f;
-    bool button_pressed = _manual_control_input->buttons() == RC_NN_CMD_MASK;
 
-    bool aux1_rising = aux1_high && !_aux1_high_last;
-    bool aux1_falling = aux1_low && !_aux1_low_last;
-    bool button_rising = button_pressed && !_button_pressed_last;
+    if (_vehicle_status->navState() != POSCTL_NAV_STATE) {
+      _takeoff_button_pressed_last = takeoff_button_pressed;
+      _neural_trigger_aux1_high_last = aux1_high;
+      _neural_trigger_aux1_low_last = aux1_low;
+      return;
+    }
 
-    if (aux1_rising || aux1_falling || button_rising) {
+    bool takeoff_button_rising =
+        takeoff_button_pressed && !_takeoff_button_pressed_last;
+    bool aux1_rising = aux1_high && !_neural_trigger_aux1_high_last;
+    bool aux1_falling = aux1_low && !_neural_trigger_aux1_low_last;
+    bool neural_trigger = aux1_rising || aux1_falling;
+
+    if (takeoff_button_rising) {
+      startTakeoff();
+    } else if (neural_trigger) {
       if (!isNeuralControlAvailable()) {
         RCLCPP_WARN(node().get_logger(),
                     "Neural control not available, trigger ignored");
         _mavlink_logger->warning("[Neural] neural_infer not responding");
       } else {
-        RCLCPP_INFO(node().get_logger(),
-                    "Neural control available, entering NeuralCtrl");
-        _mavlink_logger->info("[Neural] Entering NeuralCtrl mode");
-        runState(State::NeuralCtrl, px4_ros2::Result::Success);
+        startNeuralCtrl();
       }
     }
 
-    _aux1_high_last = aux1_high;
-    _aux1_low_last = aux1_low;
-    _button_pressed_last = button_pressed;
+    _takeoff_button_pressed_last = takeoff_button_pressed;
+    _neural_trigger_aux1_high_last = aux1_high;
+    _neural_trigger_aux1_low_last = aux1_low;
   }
 
   void publishCurrentPositionAsTarget() {
@@ -302,34 +319,4 @@ private:
     }
   }
 
-  void handlePositionSwitchResult(px4_ros2::Result result) {
-    if (result == px4_ros2::Result::Success)
-      return;
-
-    switch (result) {
-    case px4_ros2::Result::Rejected:
-      RCLCPP_ERROR(node().get_logger(),
-                   "Failed to switch to Position mode: Rejected");
-      _mavlink_logger->error("[Neural] Position mode rejected");
-      break;
-    case px4_ros2::Result::Timeout:
-      RCLCPP_ERROR(node().get_logger(),
-                   "Failed to switch to Position mode: Timeout");
-      _mavlink_logger->error("[Neural] Position mode timeout");
-      break;
-    case px4_ros2::Result::Interrupted:
-      RCLCPP_ERROR(node().get_logger(), "Position mode switch interrupted");
-      _mavlink_logger->error("[Neural] Position mode interrupted");
-      break;
-    case px4_ros2::Result::Deactivated:
-      RCLCPP_WARN(node().get_logger(), "Position mode is deactivated");
-      _mavlink_logger->warning("[Neural] Position mode deactivated");
-      break;
-    default:
-      RCLCPP_ERROR(node().get_logger(), "Schedule position mode failed: %s",
-                   resultToString(result));
-      _mavlink_logger->error("[Neural] Position mode failed");
-      break;
-    }
-  }
 };

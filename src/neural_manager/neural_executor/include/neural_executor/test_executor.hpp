@@ -40,7 +40,7 @@ public:
     _neural_manual_mode(neural_manual_mode),
     _context(std::make_unique<px4_ros2::Context>(node())),
     _vehicle_status(std::make_unique<px4_ros2::VehicleStatus>(*_context)),
-    _manual_control_input(std::make_unique<px4_ros2::ManualControlInput>(*_context, false))
+    _manual_control_input(std::make_unique<px4_ros2::ManualControlInput>(owned_mode, false))
   {
     RCLCPP_INFO(node().get_logger(), "VehicleStatus and ManualControlInput are required dependencies");
     _rc_poll_timer = node().create_wall_timer(50ms, [this]() { handleRCInput(); });

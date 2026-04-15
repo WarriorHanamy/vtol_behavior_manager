@@ -14,7 +14,7 @@
 #pragma once
 
 #include <px4_ros2/components/mode.hpp>
-#include <px4_ros2/control/setpoint_types/experimental/rates.hpp>
+#include <px4_ros2/control/setpoint_types/experimental/trajectory.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 class ExecutorEntryMode : public px4_ros2::ModeBase
@@ -24,7 +24,7 @@ public:
   : ModeBase(node, Settings{"Neural Executor"}.activateEvenWhileDisarmed(
         true))
   {
-    _rates_setpoint = std::make_shared<px4_ros2::RatesSetpointType>(*this);
+    _trajectory_setpoint = std::make_shared<px4_ros2::TrajectorySetpointType>(*this);
   }
 
   ~ExecutorEntryMode() override = default;
@@ -46,5 +46,5 @@ protected:
   }
 
 private:
-  std::shared_ptr<px4_ros2::RatesSetpointType> _rates_setpoint;
+  std::shared_ptr<px4_ros2::TrajectorySetpointType> _trajectory_setpoint;
 };

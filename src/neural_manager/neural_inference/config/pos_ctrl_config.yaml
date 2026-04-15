@@ -8,27 +8,10 @@ node:
 
 model:
   task: "vtol_hover"
-  actor_type: "mlp"
-  hidden_dim: 64
-  num_layers: 1
-  tensorrt:
-    enabled: true
-    auto_build: false
-    max_batch_size: 1
-    fp16: true
-    int8: false
   inference:
-    backends: ["tensorrt", "onnx_cuda", "onnx_cpu"]
     providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    validate_shapes: true
-    output_clipping:
-      enabled: true
-      min: -1.0
-      max: 1.0
 
 control:
-  update_rate: 100.0
-  update_period: 0.01
   timeout_ms: 50.0
   control_mode: "acc_rates"
   min_thrust_g: 0.0
@@ -38,9 +21,6 @@ control:
     use_tanh_activation: false
     enable_action_clipping: true
 
-safety:
-  enable_failure_detection: true
-  auto_stop_on_timeout: true
 
 debug:
   enabled: false
