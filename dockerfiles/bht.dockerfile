@@ -2,7 +2,7 @@
 FROM osrf/ros:humble-desktop
 SHELL ["/bin/bash", "-c"]
 
-COPY dockerfiles/ros2_entrypoint.sh /entrypoint.sh
+COPY dockerfiles/bht_entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV DEBIAN_FRONTEND=noninteractive

@@ -21,7 +21,7 @@
 # =============================================================================
 
 VTOL_OFFLOAD_CONTAINER ?= vtol-build-offload
-VTOL_OFFLOAD_IMAGE ?= ros2-vtol:latest
+VTOL_OFFLOAD_IMAGE ?= bht-vtol:latest
 PX4_SUBMODULE_PATH := deps/PX4-Neupilot
 GIT_SAFE_FLAGS := -c safe.directory=$(CURDIR) -c safe.directory=$(abspath $(PX4_SUBMODULE_PATH))
 
@@ -35,7 +35,7 @@ IMAGE_PREFIX ?= vtol
 IMAGE_SUFFIX ?= jetson
 
 # Deployment image naming (following linker convention)
-ROS2_IMAGE := $(IMAGE_PREFIX)/ros2-$(IMAGE_SUFFIX):latest
+ROS2_IMAGE := $(IMAGE_PREFIX)/bht-$(IMAGE_SUFFIX):latest
 
 # =============================================================================
 # Deployment configuration (copied from linker - fixed convention)
@@ -50,9 +50,9 @@ SSH_KEY := ~/.ssh/id_ed25519
 SSH_OPTS := $(if $(wildcard $(SSH_KEY)),-i $(SSH_KEY),)
 
 # Prep image and archive for two-stage build
-ROS2_PREP_IMAGE := $(IMAGE_PREFIX)/ros2-prep-$(IMAGE_SUFFIX):latest
-ROS2_PREP_ARCHIVE := $(IMAGE_DIR)/ros2-prep-$(IMAGE_SUFFIX).tar
-ROS2_REMOTE_BUILD_DIR := $(REMOTE_DIR)/ros2-native
+ROS2_PREP_IMAGE := $(IMAGE_PREFIX)/bht-prep-$(IMAGE_SUFFIX):latest
+ROS2_PREP_ARCHIVE := $(IMAGE_DIR)/bht-prep-$(IMAGE_SUFFIX).tar
+ROS2_REMOTE_BUILD_DIR := $(REMOTE_DIR)/bht-native
 
 # =============================================================================
 # Shipping macro (copied from linker)
@@ -79,16 +79,16 @@ sim:
 	@systemctl --user import-environment DISPLAY
 	@echo ">>> Starting simulation session via systemd..."
 	@systemctl --user start sim-session.service
-	@echo ">>> Waiting for ros2 container to be ready..."
+	@echo ">>> Waiting for bht container to be ready..."
 	@for i in $$(seq 1 30); do \
-		if docker ps --filter "name=ros2" --format "{{.Names}}" | grep -q .; then \
-			echo ">>> ros2 container ready"; \
+		if docker ps --filter "name=bht" --format "{{.Names}}" | grep -q .; then \
+			echo ">>> bht container ready"; \
 			echo ">>> Done. Use 'make sim-attach' to attach to tmux."; \
 			exit 0; \
 		fi; \
 		sleep 1; \
 	done; \
-	echo "Warning: ros2 container not ready after 30s"
+	echo "Warning: bht container not ready after 30s"
 
 .PHONY: sim-kill
 
@@ -173,10 +173,10 @@ POLICIES_SRC ?= /home/rec/server/policies
 .PHONY: sync-policies
 
 sync-policies:
-	@echo ">>> Copying policies to ros2 container..."
-	@CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+	@echo ">>> Copying policies to bht container..."
+	@CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 	if [ -z "$$CONTAINER" ]; then \
-		echo "Error: ros2 container not running. Use 'make sim' first."; \
+		echo "Error: bht container not running. Use 'make sim' first."; \
 		exit 1; \
 	fi; \
 	if [ ! -d "$(POLICIES_SRC)" ]; then \
@@ -194,10 +194,10 @@ sync-policies:
 .PHONY: neural-infer
 
 neural-infer: sync-policies
-	@echo ">>> Running neural_infer in ros2 container..."
-	@CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+	@echo ">>> Running neural_infer in bht container..."
+	@CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 	if [ -z "$$CONTAINER" ]; then \
-		echo "Error: ros2 container not running. Use 'make sim' first."; \
+		echo "Error: bht container not running. Use 'make sim' first."; \
 		exit 1; \
 	fi; \
 	echo ">>> Syncing src to container..."; \
@@ -211,12 +211,12 @@ neural-infer: sync-policies
 .PHONY: docker-build-ros2-jetson
 
 docker-build-ros2-jetson: check-network
-	@echo "[1/4] Building ROS2 prep image locally for $(PLATFORM)..."
+	@echo "[1/4] Building BHT prep image locally for $(PLATFORM)..."
 	@mkdir -p $(IMAGE_DIR)
 	$(DOCKER) run --rm --privileged tonistiigi/binfmt --install arm64 || true
 	$(DOCKER) buildx build \
 		--platform $(PLATFORM) \
-		-f dockerfiles/ros2.prep.Dockerfile \
+		-f dockerfiles/bht.prep.Dockerfile \
 		--target prep \
 		-t $(ROS2_PREP_IMAGE) \
 		--output type=docker,dest=$(ROS2_PREP_ARCHIVE) \
@@ -225,8 +225,8 @@ docker-build-ros2-jetson: check-network
 	$(call ship-to-device,$(ROS2_PREP_ARCHIVE),$(ROS2_REMOTE_BUILD_DIR))
 	@echo "[3/4] Loading prep image on Jetson..."
 	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "docker load -i $(REMOTE_DIR)/$(notdir $(ROS2_PREP_ARCHIVE))"
-	@echo "[4/4] Building final ROS2 image natively on Jetson..."
-	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "docker build --network=host -f $(ROS2_REMOTE_BUILD_DIR)/dockerfiles/ros2.native.Dockerfile --build-arg PREP_IMAGE=$(ROS2_PREP_IMAGE) -t $(ROS2_IMAGE) $(ROS2_REMOTE_BUILD_DIR)"
+	@echo "[4/4] Building final BHT image natively on Jetson..."
+	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "docker build --network=host -f $(ROS2_REMOTE_BUILD_DIR)/dockerfiles/bht.native.Dockerfile --build-arg PREP_IMAGE=$(ROS2_PREP_IMAGE) -t $(ROS2_IMAGE) $(ROS2_REMOTE_BUILD_DIR)"
 
 .PHONY: docker-run-ros2-jetson
 

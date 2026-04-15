@@ -13,7 +13,7 @@ ExecStart=/bin/sh -c '\
   echo "========================================"; \
   echo "Starting VTOL Simulation Session"; \
   echo "========================================"; \
-  docker compose up -d --remove-orphans px4 qgc ros2 && \
+   docker compose up -d --remove-orphans px4 qgc bht && \
   echo ""; \
   echo "✓ Containers started:"; \
   docker compose ps --format "table {{.Name}}\t{{.Status}}"; \
@@ -22,7 +22,7 @@ ExecStart=/bin/sh -c '\
   systemctl --user start neural.target && \
   echo "✓ Neural executor started"; \
   echo ""; \
-  echo "To enter ros2 container: docker compose attach ros2"; \
+   echo "To enter bht container: docker compose attach bht"; \
   echo "To exit container (keep running): Ctrl+P Ctrl+Q"; \
   echo "========================================"'
 

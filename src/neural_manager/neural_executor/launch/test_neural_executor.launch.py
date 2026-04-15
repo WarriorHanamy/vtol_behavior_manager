@@ -27,10 +27,17 @@ def generate_launch_description():
     description="Configuration file for demo targets and failsafe parameters",
   )
 
+  target_offset_arg = DeclareLaunchArgument(
+    "target_offset",
+    default_value="[0.0, 0.0, 0.0]",
+    description="Target position offset as [x, y, z] in meters (body frame, z negative=up)",
+  )
+
   common_params = {
     "config_file": LaunchConfiguration("config_file"),
     "neural_setpoint_timeout": 0.05,
     "use_sim_time": False,
+    "target_offset": LaunchConfiguration("target_offset"),
   }
 
   executor_node = Node(
@@ -51,4 +58,4 @@ def generate_launch_description():
     ],
   )
 
-  return LaunchDescription([config_file_arg, executor_node])
+  return LaunchDescription([config_file_arg, target_offset_arg, executor_node])

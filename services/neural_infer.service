@@ -1,23 +1,23 @@
 [Unit]
-Description=Neural Inference Service (runs inside ros2 container)
+Description=Neural Inference Service (runs inside bht container)
 
-BindsTo=ros2-liveness.service
-After=ros2-liveness.service neural_executor.service
+BindsTo=bht-liveness.service
+After=bht-liveness.service neural_executor.service
 PartOf=sim-session.service
 Before=neural.target
 
 [Service]
 Type=simple
-# Dynamic container discovery - find the running ros2 container
-ExecStartPre=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+# Dynamic container discovery - find the running bht container
+ExecStartPre=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 if [ -z "$$CONTAINER" ]; then \
-  echo "Error: ros2 container not found" >&2; \
+  echo "Error: bht container not found" >&2; \
   exit 1; \
 fi; \
 echo "$$CONTAINER"'
-# Execute neural_infer.py inside the ros2 container
+# Execute neural_infer.py inside the bht container
 # Using container-local Python intentionally
-ExecStart=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+ExecStart=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 docker exec -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && \
 cd /home/ros/ros2_ws && \
 source install/setup.bash && \

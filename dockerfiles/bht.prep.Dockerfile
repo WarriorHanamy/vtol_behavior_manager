@@ -1,5 +1,5 @@
 # =============================================================
-# ROS2 prep image for Jetson deployment (two-stage build)
+# BHT prep image for Jetson deployment (two-stage build)
 #
 # This Dockerfile intentionally stops before any native compilation.
 # It is safe to build on the host with buildx (ARM64) and then hand

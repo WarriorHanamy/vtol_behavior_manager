@@ -20,7 +20,7 @@ services:
         QGC_VERSION: ${QGC_VERSION:-5.0.8}
     image: qgc5-vtol:latest
     depends_on:
-      ros2:
+      bht:
         condition: service_started
 
     restart: no
@@ -45,14 +45,14 @@ services:
         reservations:
           memory: 1G
 
-  # ROS2 Workspace - Neural control and inference
-  ros2:
+   # BHT Workspace - Neural control and inference
+   bht:
     build:
       context: .
-      dockerfile: dockerfiles/ros2.dockerfile
+      dockerfile: dockerfiles/bht.dockerfile
       args:
         LATETST: "true"
-    image: ros2-vtol:latest
+    image: bht-vtol:latest
 
     restart: no
     privileged: true
@@ -96,7 +96,7 @@ services:
         px4_deps: service:px4-deps
     image: px4-gazebo-harmonic-vtol:v1
     depends_on:
-      ros2:
+      bht:
         condition: service_started
 
     restart: no

@@ -1,23 +1,23 @@
 [Unit]
-Description=Test Executor Service (runs inside ros2 container)
+Description=Test Executor Service (runs inside bht container)
 
-BindsTo=ros2-liveness.service
-After=ros2-liveness.service
+BindsTo=bht-liveness.service
+After=bht-liveness.service
 PartOf=sim-session.service
 Before=test.target
 
 [Service]
 Type=simple
-# Dynamic container discovery - find the running ros2 container
-ExecStartPre=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+# Dynamic container discovery - find the running bht container
+ExecStartPre=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 if [ -z "$$CONTAINER" ]; then \
-  echo "Error: ros2 container not found" >&2; \
-  echo "Please start the ros2 container first using 'make sim' or 'docker compose up -d ros2'" >&2; \
+  echo "Error: bht container not found" >&2; \
+  echo "Please start the bht container first using 'make sim' or 'docker compose up -d bht'" >&2; \
   exit 1; \
 fi; \
 echo "$$CONTAINER"'
-# Execute test_neural_executor launch file inside the ros2 container
-ExecStart=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=ros2" --format "{{.Names}}" | head -n 1); \
+# Execute test_neural_executor launch file inside the bht container
+ExecStart=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 docker exec -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && \
 cd /home/ros/ros2_ws && \
 source install/setup.bash && \

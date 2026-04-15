@@ -11,6 +11,7 @@
 #include <neural_executor/mavlink_logger.hpp>
 
 #include <chrono>
+#include <Eigen/Core>
 
 using namespace std::chrono_literals;
 
@@ -22,9 +23,6 @@ class NeuralExecutor : public px4_ros2::ModeExecutorBase
   static constexpr double STILL_WAIT_TIME_S = 3.0;
   static constexpr double NEURAL_CONTROL_TIMEOUT_S = 0.5;
   static constexpr double NEURAL_CONTROL_WAIT_S = 2.0;
-  static constexpr double TARGET_OFFSET_X = -0.5;
-  static constexpr double TARGET_OFFSET_Y = -0.5;
-  static constexpr double TARGET_OFFSET_Z = -0.5;
 
 public:
   enum class State
@@ -65,6 +63,16 @@ public:
 
     _odometry_position = std::make_unique<px4_ros2::OdometryLocalPosition>(*_context);
     _target_pub = node().create_publisher<px4_msgs::msg::TrajectorySetpoint>("/neural/target", 10);
+
+    // Declare and read target offset parameter
+    node().declare_parameter("target_offset", std::vector<double>{0.0, 0.0, 0.0});
+    auto offset_param = node().get_parameter("target_offset").as_double_array();
+    if (offset_param.size() == 3) {
+      _target_offset = Eigen::Vector3d(offset_param[0], offset_param[1], offset_param[2]);
+    } else {
+      RCLCPP_WARN(node().get_logger(), "target_offset must have 3 elements, using default (0,0,0)");
+      _target_offset = Eigen::Vector3d::Zero();
+    }
   }
 
   void onActivate() override
@@ -201,11 +209,13 @@ private:
 
   std::unique_ptr<neural_executor::MavlinkLogger> _mavlink_logger;
 
-  std::unique_ptr<px4_ros2::OdometryLocalPosition> _odometry_position;
-  rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr _target_pub;
-  rclcpp::TimerBase::SharedPtr _target_publish_timer;
+   std::unique_ptr<px4_ros2::OdometryLocalPosition> _odometry_position;
+   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr _target_pub;
+   rclcpp::TimerBase::SharedPtr _target_publish_timer;
 
-  bool _waiting_for_neural_control{false};
+   Eigen::Vector3d _target_offset{0.0, 0.0, 0.0};
+
+   bool _waiting_for_neural_control{false};
   rclcpp::Time _neural_wait_start_time;
 
   bool isNeuralControlAvailable()
@@ -297,12 +307,12 @@ private:
       return;
     }
 
-    auto pos = _odometry_position->positionNed();
-    px4_msgs::msg::TrajectorySetpoint msg;
-    msg.timestamp = node().get_clock()->now().nanoseconds() / 1000;
-    msg.position[0] = pos.x() + TARGET_OFFSET_X;
-    msg.position[1] = pos.y() + TARGET_OFFSET_Y;
-    msg.position[2] = pos.z() + TARGET_OFFSET_Z;
+     auto pos = _odometry_position->positionNed();
+     px4_msgs::msg::TrajectorySetpoint msg;
+     msg.timestamp = node().get_clock()->now().nanoseconds() / 1000;
+     msg.position[0] = pos.x() + _target_offset.x();
+     msg.position[1] = pos.y() + _target_offset.y();
+     msg.position[2] = pos.z() + _target_offset.z();
     msg.velocity[0] = NAN;
     msg.velocity[1] = NAN;
     msg.velocity[2] = NAN;

@@ -1,6 +1,6 @@
 # Test Executor Service
 
-Test Executor Service runs the test neural executor node inside the ROS2 container with a joystick readiness gate.
+Test Executor Service runs the test neural executor node inside the BHT container with a joystick readiness gate.
 
 ## Prerequisites
 
@@ -29,15 +29,15 @@ This creates a symlink from `services/test_executor.service` to `~/.config/syste
 
 ## Starting the Service
 
-### Prerequisite: Start ROS2 Container
-The test executor service runs inside the ros2 Docker Compose container. Start the container first:
+### Prerequisite: Start BHT Container
+The test executor service runs inside the BHT Docker Compose container. Start the container first:
 
 ```bash
 # Option 1: Using make (recommended)
 make sim
 
 # Option 2: Using docker compose directly
-docker compose up -d ros2
+docker compose up -d bht
 ```
 
 ### Start Test Executor Service
@@ -118,26 +118,26 @@ journalctl --user -u test_executor.service | grep -i "container"
 2. Verify PX4 or simulator is running
 3. Verify PX4 is publishing manual control setpoints:
    ```bash
-   # Inside ros2 container
-   docker exec -it <ros2-container-name> bash
+    # Inside bht container
+    docker exec -it <bht-container-name> bash
    source /opt/ros/humble/setup.bash
    source install/setup.bash
    ros2 topic echo /fmu/in/manual_control_setpoint --once
    ```
 4. If using a simulator, ensure the manual control input is enabled
 
-**Symptom:** Service exits with "ros2 container not found" error
+**Symptom:** Service exits with "bht container not found" error
 
 **Solution:**
-1. Verify the ros2 container is running:
+1. Verify the bht container is running:
    ```bash
-   docker ps --filter "name=ros2"
+   docker ps --filter "name=bht"
    ```
 2. Start the container:
    ```bash
    make sim
    # or
-   docker compose up -d ros2
+   docker compose up -d bht
    ```
 
 ### Service Restarts Repeatedly
@@ -150,7 +150,7 @@ journalctl --user -u test_executor.service | grep -i "container"
    journalctl --user -u test_executor.service -n 50
    ```
 2. Verify joystick is still connected and active
-3. Check if ROS2 container is healthy
+3. Check if BHT container is healthy
 4. Verify the test_neural_executor launch file exists:
    ```bash
    ls -la src/neural_manager/neural_executor/launch/test_neural_executor.launch.py
@@ -189,7 +189,7 @@ systemctl --user disable --now test_executor.service
 
 **Current Readiness Signal:** `_manual_control_input->buttons()` availability (non-zero value)
 
-**Container Discovery:** Dynamic (finds running container with "ros2" in name)
+**Container Discovery:** Dynamic (finds running container with "bht" in name)
 
 **Restart Policy:** on-failure with 5 second interval
 
@@ -219,7 +219,7 @@ The test executor service integrates with existing Make targets:
 # Install services (includes test_executor)
 make install
 
-# Start ros2 container
+# Start bht container
 make sim
 
 # Start neural services (includes test_executor if enabled)

@@ -56,7 +56,7 @@ This uses a two-stage Docker build pattern:
 1. **Prep stage**: Cross-compile dependencies on host (ARM64) → tarball
 2. **Native stage**: Final colcon build on Jetson device
 
-The built image is tagged as `vtol/ros2-jetson:latest`.
+The built image is tagged as `vtol/bht-jetson:latest`.
 
 **Note**: Image deployment (transfer to device) is handled by the `linker` repository's workflow.
 This repository focuses on building and simulation only.
@@ -64,12 +64,12 @@ This repository focuses on building and simulation only.
 ### Naming Conventions
 
 - **Simulation images**: Local development names
-  - `ros2-vtol:latest`
+   - `bht-vtol:latest`
   - `px4-gazebo-harmonic-vtol:v1`
   - `qgc5-vtol:latest`
 
 - **Deployment image**: Production naming following linker convention
-  - `vtol/ros2-jetson:latest`
+   - `vtol/bht-jetson:latest`
 
 ## Makefile Targets
 

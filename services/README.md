@@ -14,7 +14,7 @@ This document describes the systemd-based service architecture for managing the 
 ┌─────────────────────────────────────────────────────────┐
 │              sim-session.service (Main Service)          │
 │  - tmux session: vtol-sim                                │
-│  - docker compose up (px4, qgc, ros2)                    │
+│  - docker compose up (px4, qgc, bht)                    │
 │  - Auto-starts neural.target on success                  │
 │  - docker compose down on stop                           │
 └─────────────────────┬───────────────────────────────────┘

@@ -1,5 +1,5 @@
 # =============================================================
-# ROS2 native image for Jetson deployment (two-stage build)
+# BHT native image for Jetson deployment (two-stage build)
 #
 # This Dockerfile runs on a Jetson-native Docker daemon and resumes
 # from a prep image built elsewhere. It performs the final colcon
@@ -68,7 +68,7 @@ USER ros
 WORKDIR ${WS_DIR}
 
 # Copy entrypoint script before runtime user takes over.
-COPY --chmod=755 dockerfiles/ros2_entrypoint.sh /ros_entrypoint.sh
+COPY --chmod=755 dockerfiles/bht_entrypoint.sh /ros_entrypoint.sh
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]
