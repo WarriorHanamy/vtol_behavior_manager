@@ -24,6 +24,13 @@ uv run ruff check --fix .
 
 Never use Optional for type hinting.
 
+## Running Python
+
+Use `uv run --non-sync python` to run Python scripts to avoid asyncio event loop issues:
+```bash
+uv run --non-sync python script.py
+```
+
 ## Math Conventions
 
 - This repo quaternion convention is `(w, x, y, z)`.

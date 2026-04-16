@@ -124,6 +124,7 @@ class NeuralControlNode(rclpy.node.Node):
 
   def run_inference(self) -> None:
     """Run neural inference and publish control command."""
+    self.get_logger().info(f"📁 Model folder: {self._revision_ctx.revision_path.name}")
     self._feature_provider.update_last_action(self._last_action)
 
     obs = self._feature_provider.get_all_features()
@@ -134,10 +135,13 @@ class NeuralControlNode(rclpy.node.Node):
     control_msg = self._action_processor.process_action(raw_action)
 
     output = self._action_processor.get_last_output()
+    enu_to_target = self._feature_provider.get_enu_to_target()
     self._inference_logger.log_output(
       raw_action=raw_action,
-      thrust_acc=output["thrust_acc"],
+      thrust_acc_norm=output["thrust_acc_norm"],
+      flu_ang_vel=output["flu_ang_vel"],
       frd_ang_vel=output["frd_ang_vel"],
+      enu_to_target=enu_to_target,
     )
 
     self._control_pub.publish(control_msg)

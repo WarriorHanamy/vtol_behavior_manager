@@ -59,16 +59,20 @@ class InferenceLogger:
   def log_output(
     self,
     raw_action: np.ndarray,
-    thrust_acc: float,
+    thrust_acc_norm: float,
+    flu_ang_vel: np.ndarray,
     frd_ang_vel: np.ndarray,
+    enu_to_target: np.ndarray | None = None,
   ) -> None:
     """
     Log output results after inference.
 
     Args:
         raw_action: Raw action from neural network [thrust, roll_rate, pitch_rate, yaw_rate]
-        thrust_acc: Processed thrust acceleration in m/s^2
+        thrust_acc_norm: Normalized thrust acceleration [-1, 1]
+        flu_ang_vel: Processed angular rates in FLU frame [roll, pitch, yaw] rad/s
         frd_ang_vel: Processed angular rates in FRD frame [roll, pitch, yaw] rad/s
+        enu_to_target: Target error vector in ENU frame [e, n, -d] (meters)
     """
     self._step_count += 1
 
@@ -81,13 +85,27 @@ class InferenceLogger:
     self._logger.info("-" * 40)
     self._logger.info(f"[OUTPUT] Step {self._step_count}")
     self._logger.info(
-      f"  raw_action:      [{raw_action[0]:+.4f}, {raw_action[1]:+.4f}, {raw_action[2]:+.4f}, {raw_action[3]:+.4f}]"
+      f"  raw_actions: [{raw_action[0]:+.4f}, {raw_action[1]:+.4f}, "
+      f"{raw_action[2]:+.4f}, {raw_action[3]:+.4f}]"
     )
-    self._logger.info(f"  thrust_acc:      {thrust_acc:+.3f} m/s^2")
+    self._logger.info("  processed_actions:")
+    self._logger.info(f"    thrust_acc_norm: {thrust_acc_norm:+.4f}  (thrust-axis acc command)")
+    self._logger.info("  ------- policy frame (FLU) -------")
     self._logger.info(
-      f"  frd_ang_vel:     [{frd_ang_vel[0]:+.4f}, {frd_ang_vel[1]:+.4f}, {frd_ang_vel[2]:+.4f}] rad/s"
+      f"    flu_ang_vel: [{flu_ang_vel[0]:+.4f}, {flu_ang_vel[1]:+.4f}, "
+      f"{flu_ang_vel[2]:+.4f}] rad/s"
     )
-    self._logger.info("=" * 60)
+    self._logger.info("  ------- control publisher frame (FRD) -------")
+    self._logger.info(
+      f"    frd_ang_vel: [{frd_ang_vel[0]:+.4f}, {frd_ang_vel[1]:+.4f}, "
+      f"{frd_ang_vel[2]:+.4f}] rad/s"
+    )
+    if enu_to_target is not None:
+      self._logger.info(
+        f"    enu_to_target: [{enu_to_target[0]:+.4f}, {enu_to_target[1]:+.4f}, "
+        f"{enu_to_target[2]:+.4f}]"
+      )
+    self._logger.info("-" * 4)
 
   def log_features(
     self,

@@ -71,8 +71,12 @@ class ActionPostProcessor:
     self._angular_rate_flu_pub = None
     self._angular_rate_frd_pub = None
     if ros_node is not None:
-      self._angular_rate_flu_pub = ros_node.create_publisher(Vector3Stamped, "/neural/angular_rate_command_flu", 10)
-      self._angular_rate_frd_pub = ros_node.create_publisher(Vector3Stamped, "/neural/angular_rate_command_frd", 10)
+      self._angular_rate_flu_pub = ros_node.create_publisher(
+        Vector3Stamped, "/neural/angular_rate_command_flu", 10
+      )
+      self._angular_rate_frd_pub = ros_node.create_publisher(
+        Vector3Stamped, "/neural/angular_rate_command_frd", 10
+      )
       if self._logger:
         self._logger.info("📡 动作后处理器话题: /neural/angular_rate_command_flu (body_flu)")
         self._logger.info("📡 动作后处理器话题: /neural/angular_rate_command_frd (body_frd)")
@@ -83,11 +87,15 @@ class ActionPostProcessor:
 
     self._last_action = np.zeros(4, dtype=np.float32)
     self._last_thrust_acc = 0.0
+    self._last_thrust_acc_norm = 0.0
     self._last_frd_ang_vel = np.zeros(3, dtype=np.float32)
+    self._last_flu_ang_vel = np.zeros(3, dtype=np.float32)
     self._control_command_count = 0
 
     if self._logger:
-      self._logger.info("🎮 动作后处理器模式: Thrust Acceleration + Body Rates (VehicleAccRatesSetpoint)")
+      self._logger.info(
+        "🎮 动作后处理器模式: Thrust Acceleration + Body Rates (VehicleAccRatesSetpoint)"
+      )
 
   def process_action(self, raw_action: np.ndarray) -> VehicleAccRatesSetpoint:
     """
@@ -125,11 +133,16 @@ class ActionPostProcessor:
     flu_ang_vel = np.array([roll_rate, pitch_rate, yaw_rate])
     frd_ang_vel = frd_flu_rotate(flu_ang_vel)
 
+    self._last_thrust_acc_norm = thrust_raw
+    self._last_flu_ang_vel = flu_ang_vel.copy()
+
     self._publish_angular_rates(flu_ang_vel, frd_ang_vel)
 
     return self._create_acc_rates_message(thrust_raw, frd_ang_vel)
 
-  def _create_acc_rates_message(self, thrust_raw: float, frd_ang_vel: np.ndarray) -> VehicleAccRatesSetpoint:
+  def _create_acc_rates_message(
+    self, thrust_raw: float, frd_ang_vel: np.ndarray
+  ) -> VehicleAccRatesSetpoint:
     """
     Create VehicleAccRatesSetpoint message.
 
@@ -217,7 +230,9 @@ class ActionPostProcessor:
     if self._acc_fixed:
       return float(-G)
 
-    thrust_g = ((thrust_raw + 1.0) / 2.0) * (self._max_thrust_g - self._min_thrust_g) + self._min_thrust_g
+    thrust_g = ((thrust_raw + 1.0) / 2.0) * (
+      self._max_thrust_g - self._min_thrust_g
+    ) + self._min_thrust_g
     thrust_acc = -thrust_g * G
 
     return float(thrust_acc)
@@ -258,11 +273,15 @@ class ActionPostProcessor:
     Returns:
         Dictionary containing:
         - thrust_acc: Thrust acceleration in m/s^2
+        - thrust_acc_norm: Normalized thrust acceleration [-1, 1]
         - frd_ang_vel: Angular rates in FRD frame [roll, pitch, yaw] rad/s
+        - flu_ang_vel: Angular rates in FLU frame [roll, pitch, yaw] rad/s
     """
     return {
       "thrust_acc": self._last_thrust_acc,
+      "thrust_acc_norm": self._last_thrust_acc_norm,
       "frd_ang_vel": self._last_frd_ang_vel.copy(),
+      "flu_ang_vel": self._last_flu_ang_vel.copy(),
     }
 
   def convert_action_for_display(self, raw_action: np.ndarray) -> dict:
