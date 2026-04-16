@@ -30,6 +30,7 @@ services:
       - QT_X11_NO_MITSHM=1
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
+      - ROS_DOMAIN_ID=30
     volumes:
       - ${HOME}/.Xauthority:/home/qgc/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
@@ -63,9 +64,13 @@ services:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
       - ROS_DISTRO=humble
+      - ROS_DOMAIN_ID=30
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/etc/fastdds/fastdds.xml
     volumes:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority
       - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./fastdds-debug.xml:/etc/fastdds/fastdds.xml:ro
     stdin_open: true
     tty: true
     command: bash
@@ -106,6 +111,8 @@ services:
       - QT_X11_NO_MITSHM=1
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
+      - ROS_DOMAIN_ID=30
+      - XRCE_DOMAIN_ID_OVERRIDE=30
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ${HOME}/.Xauthority:/tmp/.docker.xauth:ro
@@ -124,4 +131,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
