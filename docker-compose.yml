@@ -45,8 +45,8 @@ services:
         reservations:
           memory: 1G
 
-   # BHT Workspace - Neural control and inference
-   bht:
+  # BHT Workspace - Neural control and inference
+  bht:
     build:
       context: .
       dockerfile: dockerfiles/bht.dockerfile
@@ -124,5 +124,4 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
 

@@ -153,6 +153,10 @@ systemctl --user daemon-reload
 journalctl --user -u sim-session.service -n 50
 ```
 
+`sim-session.service` resolves the repo root from the installed symlink in
+`~/.config/systemd/user/`. If you move this repository, rerun `make install`
+to refresh the symlink target.
+
 ### tmux session not accessible
 ```bash
 # List tmux sessions

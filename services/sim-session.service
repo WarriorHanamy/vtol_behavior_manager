@@ -7,26 +7,43 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/rec/server/vtol-interface
 
-ExecStart=/bin/sh -c '\
+ExecStart=/bin/sh -eu -c '\
+  UNIT_LINK="$$HOME/.config/systemd/user/sim-session.service"; \
+  UNIT_PATH="$$(readlink -f "$$UNIT_LINK")"; \
+  REPO_ROOT="$$(dirname "$$(dirname "$$UNIT_PATH")")"; \
+  if [ ! -f "$$REPO_ROOT/docker-compose.yml" ]; then \
+    echo "Error: docker-compose.yml not found under $$REPO_ROOT" >&2; \
+    echo "Reinstall services with make install if the repo was moved." >&2; \
+    exit 1; \
+  fi; \
+  cd "$$REPO_ROOT"; \
   echo "========================================"; \
   echo "Starting VTOL Simulation Session"; \
   echo "========================================"; \
-   docker compose up -d --remove-orphans px4 qgc bht && \
+   docker compose up -d --remove-orphans px4 qgc bht; \
   echo ""; \
   echo "✓ Containers started:"; \
   docker compose ps --format "table {{.Name}}\t{{.Status}}"; \
   echo ""; \
   echo "Starting neural executor..."; \
-  systemctl --user start neural.target && \
+  systemctl --user start neural.target; \
   echo "✓ Neural executor started"; \
   echo ""; \
    echo "To enter bht container: docker compose attach bht"; \
   echo "To exit container (keep running): Ctrl+P Ctrl+Q"; \
   echo "========================================"'
 
-ExecStop=/bin/sh -c '\
+ExecStop=/bin/sh -eu -c '\
+  UNIT_LINK="$$HOME/.config/systemd/user/sim-session.service"; \
+  UNIT_PATH="$$(readlink -f "$$UNIT_LINK")"; \
+  REPO_ROOT="$$(dirname "$$(dirname "$$UNIT_PATH")")"; \
+  if [ ! -f "$$REPO_ROOT/docker-compose.yml" ]; then \
+    echo "Error: docker-compose.yml not found under $$REPO_ROOT" >&2; \
+    echo "Reinstall services with make install if the repo was moved." >&2; \
+    exit 1; \
+  fi; \
+  cd "$$REPO_ROOT"; \
   echo "========================================"; \
   echo "Stopping VTOL Simulation Session"; \
   echo "========================================"; \
