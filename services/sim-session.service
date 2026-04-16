@@ -7,6 +7,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+Environment=XAUTHORITY=%h/.Xauthority
+
+ExecStartPre=/bin/sh -c 'if [ -n "${DISPLAY:-}" ]; then xhost +local:docker >/dev/null 2>&1 || true; fi'
 
 ExecStart=/bin/sh -eu -c '\
   UNIT_LINK="$$HOME/.config/systemd/user/sim-session.service"; \

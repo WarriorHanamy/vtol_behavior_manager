@@ -75,8 +75,8 @@ endef
 sim:
 	@echo ">>> Granting X11 access to docker..."
 	@xhost +local:docker 2>/dev/null || true
-	@echo ">>> Passing DISPLAY to systemd..."
-	@systemctl --user import-environment DISPLAY
+	@echo ">>> Passing GUI session env to systemd..."
+	@systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS XAUTHORITY
 	@echo ">>> Starting simulation session via systemd..."
 	@systemctl --user start sim-session.service
 	@echo ">>> Waiting for bht container to be ready..."
