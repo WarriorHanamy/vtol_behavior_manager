@@ -9,7 +9,9 @@ node:
 model:
   task: "vtol_hover"
   inference:
+    backend: "onnx"
     providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    engine_path: ""
 
 control:
   timeout_ms: 50.0

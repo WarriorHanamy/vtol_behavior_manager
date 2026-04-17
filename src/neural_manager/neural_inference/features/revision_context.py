@@ -31,6 +31,7 @@ class RevisionContext:
 
   revision_path: Path
   model_path: Path
+  engine_path: Path | None = None
   metadata_path: Path
   feature_specs: list[FeatureSpec]
   obs_dim: int
@@ -69,9 +70,14 @@ class RevisionContext:
     specs = [FeatureSpec(name=f["name"], dim=f["dim"]) for f in meta.get("low_dim", [])]
     obs_dim = sum(s.dim for s in specs)
 
+    engine_path = latest / "vtol_hover.fp16.engine"
+    if not engine_path.exists():
+      engine_path = None
+
     return cls(
       revision_path=latest,
       model_path=latest / "model.onnx",
+      engine_path=engine_path,
       metadata_path=metadata_path,
       feature_specs=specs,
       obs_dim=obs_dim,
@@ -90,6 +96,7 @@ class RevisionContext:
     return (
       f"RevisionContext(\n"
       f"  revision={self.revision_path.name},\n"
+      f"  engine={self.engine_path},\n"
       f"  model={self.model_path},\n"
       f"  obs_dim={self.obs_dim},\n"
       f"  action_dim={self.action_dim},\n"

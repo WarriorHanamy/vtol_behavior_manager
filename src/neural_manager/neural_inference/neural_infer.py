@@ -24,7 +24,10 @@ from omegaconf.omegaconf import DictConfig
 
 from neural_manager.neural_inference.control.action_post_processor import ActionPostProcessor
 from neural_manager.neural_inference.features import RevisionContext, VtolFeatureProvider
-from neural_manager.neural_inference.inference.actors import MLPPolicyActor
+from neural_manager.neural_inference.inference.actors import BasePolicyActor, MLPPolicyActor
+from neural_manager.neural_inference.inference.tensorrt_utils.tensorrt_actor import (
+  TensorRTMLPActor,
+)
 from neural_manager.neural_inference.logging import InferenceLogger
 from px4_msgs.msg import VehicleAccRatesSetpoint
 
@@ -102,14 +105,27 @@ class NeuralControlNode(rclpy.node.Node):
     print(f"  Obs dim: {ctx.obs_dim}")
     return ctx
 
-  def _create_policy_actor(self) -> MLPPolicyActor:
-    """Create policy actor from discovered revision."""
+  def _create_policy_actor(self) -> BasePolicyActor:
+    """Create policy actor from discovered revision based on config backend."""
     expected_input_shape = list(self._revision_ctx.get_expected_input_shape())
     expected_output_shape = list(self._revision_ctx.get_expected_output_shape())
 
     self.get_logger().info(
       f"Model shapes - input: {expected_input_shape}, output: {expected_output_shape}"
     )
+
+    backend = getattr(self.cfg.model.inference, "backend", "onnx")
+
+    if backend == "tensorrt":
+      engine_path = self._resolve_engine_path()
+      actor = TensorRTMLPActor(
+        engine_path,
+        node_logger=self.get_logger(),
+        expected_input_shape=expected_input_shape,
+        expected_output_shape=expected_output_shape,
+      )
+      self.get_logger().info("✓ TensorRT MLP policy actor created")
+      return actor
 
     actor = MLPPolicyActor(
       self._revision_ctx.model_path,
@@ -118,9 +134,23 @@ class NeuralControlNode(rclpy.node.Node):
       expected_input_shape=expected_input_shape,
       expected_output_shape=expected_output_shape,
     )
-
-    self.get_logger().info("✓ MLP policy actor created")
+    self.get_logger().info("✓ ONNX MLP policy actor created")
     return actor
+
+  def _resolve_engine_path(self) -> Path:
+    """Resolve TensorRT engine path from config override or revision context."""
+    cfg_engine_path = getattr(self.cfg.model.inference, "engine_path", "")
+    if cfg_engine_path:
+      return Path(cfg_engine_path)
+
+    if self._revision_ctx.engine_path is not None:
+      return self._revision_ctx.engine_path
+
+    fallback = ARTIFACTS_ROOT / "vtol_hover.fp16.engine"
+    if fallback.exists():
+      return fallback
+
+    raise FileNotFoundError(f"No TensorRT engine found. Searched: revision dir, {fallback}")
 
   def run_inference(self) -> None:
     """Run neural inference and publish control command."""
