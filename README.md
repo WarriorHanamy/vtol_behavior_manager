@@ -47,14 +47,13 @@ This workflow is for rapid development and testing on a workstation.
 To build the ROS2 image for Jetson deployment:
 
 ```bash
-make docker-build-ros2-jetson   # Two-stage ARM64 build (prep + native)
+make docker-build-ros2-jetson   # Single-stage ARM64 build
 make docker-run-ros2-jetson      # Test the built image locally
 make docker-run-ros2-jetson-shell  # Open shell in Jetson image
 ```
 
-This uses a two-stage Docker build pattern:
-1. **Prep stage**: Cross-compile dependencies on host (ARM64) → tarball
-2. **Native stage**: Final colcon build on Jetson device
+This uses a single-stage Docker build pattern that installs dependencies
+and compiles natively in one image for simplicity.
 
 The built image is tagged as `vtol/bht-jetson:latest`.
 

@@ -4,13 +4,13 @@
 #
 # Dual-Workflow Design:
 # 1. Simulation (amd64): docker-compose based, full stack (ros2 + px4 + qgc)
-# 2. Deployment Build (arm64): Two-stage Jetson image build following linker pattern
+# 2. Deployment Build (arm64): Single-stage Jetson image build
 #
 # Key targets:
 #   make sim                    - Start simulation environment (docker-compose)
 #   make sim-kill               - Stop simulation
 #   make docker-offload-ros2BuildTask - Build in simulation container
-#   make docker-build-ros2-jetson - Build Jetson deployment image (two-stage)
+#   make docker-build-ros2-jetson - Build Jetson deployment image (single-stage)
 #   make docker-run-ros2-jetson   - Test deployment image locally
 #
 # Deployment (image transfer) is handled by the 'linker' repository.
@@ -44,26 +44,23 @@ ROS2_IMAGE := $(IMAGE_PREFIX)/bht-$(IMAGE_SUFFIX):latest
 HOST_IP := 192.168.55.100
 DEVICE_IP := 192.168.55.1
 DEVICE_USER := nv
-IMAGE_DIR := /tmp/vtol-images
+
 REMOTE_DIR := /tmp/vtol-images
 SSH_KEY := ~/.ssh/id_ed25519
 SSH_OPTS := $(if $(wildcard $(SSH_KEY)),-i $(SSH_KEY),)
 
-# Prep image and archive for two-stage build
-ROS2_PREP_IMAGE := $(IMAGE_PREFIX)/bht-prep-$(IMAGE_SUFFIX):latest
-ROS2_PREP_ARCHIVE := $(IMAGE_DIR)/bht-prep-$(IMAGE_SUFFIX).tar
+# Remote build directory for native build
 ROS2_REMOTE_BUILD_DIR := $(REMOTE_DIR)/bht-native
 
 # =============================================================================
 # Shipping macro (copied from linker)
 # =============================================================================
-# ship-to-device: copy prep archive and full dockerfiles/ to device
-# $(1) = prep archive path (local)
-# $(2) = remote build directory
-define ship-to-device
-  @ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "rm -rf $(2) && mkdir -p $(2)/dockerfiles"
-  @scp $(SSH_OPTS) $(1) $(DEVICE_USER)@$(DEVICE_IP):$(REMOTE_DIR)/
-  @scp $(SSH_OPTS) -r dockerfiles/. $(DEVICE_USER)@$(DEVICE_IP):$(2)/dockerfiles/
+# ship-context-to-device: copy build context to device
+# $(1) = remote build directory
+define ship-context-to-device
+  @ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "rm -rf $(1) && mkdir -p $(1)"
+  @rsync -avz --exclude='.git' --exclude='build' --exclude='.venv' --exclude='__pycache__' \
+    -e "ssh $(SSH_OPTS)" . $(DEVICE_USER)@$(DEVICE_IP):$(1)/
 endef
 
 # =============================================================================
@@ -211,28 +208,27 @@ neural-infer: sync-policies
 	docker exec -i -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer"
 
 # =============================================================================
-# Deployment Build (Jetson, arm64) - Two-stage pattern from linker
+# Shipping targets (copied from linker)
+# =============================================================================
+
+.PHONY: ship-context
+
+ship-context:
+	@echo ">>> Copying build context to Jetson (excluding deps/)..."
+	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "rm -rf $(ROS2_REMOTE_BUILD_DIR) && mkdir -p $(ROS2_REMOTE_BUILD_DIR)"
+	@rsync -avz --exclude='.git' --exclude='build' --exclude='.venv' --exclude='__pycache__' --exclude='deps/' \
+		-e "ssh $(SSH_OPTS)" . $(DEVICE_USER)@$(DEVICE_IP):$(ROS2_REMOTE_BUILD_DIR)/
+
+# =============================================================================
+# Deployment Build (Jetson, arm64) - Native single-stage build
 # =============================================================================
 
 .PHONY: docker-build-ros2-jetson
 
-docker-build-ros2-jetson: check-network
-	@echo "[1/4] Building BHT prep image locally for $(PLATFORM)..."
-	@mkdir -p $(IMAGE_DIR)
-	$(DOCKER) run --rm --privileged tonistiigi/binfmt --install arm64 || true
-	$(DOCKER) buildx build \
-		--platform $(PLATFORM) \
-		-f dockerfiles/bht.prep.Dockerfile \
-		--target prep \
-		-t $(ROS2_PREP_IMAGE) \
-		--output type=docker,dest=$(ROS2_PREP_ARCHIVE) \
-		.
-	@echo "[2/4] Shipping prep image and native Dockerfile to $(DEVICE_USER)@$(DEVICE_IP)..."
-	$(call ship-to-device,$(ROS2_PREP_ARCHIVE),$(ROS2_REMOTE_BUILD_DIR))
-	@echo "[3/4] Loading prep image on Jetson..."
-	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "docker load -i $(REMOTE_DIR)/$(notdir $(ROS2_PREP_ARCHIVE))"
-	@echo "[4/4] Building final BHT image natively on Jetson..."
-	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "docker build --network=host -f $(ROS2_REMOTE_BUILD_DIR)/dockerfiles/bht.native.Dockerfile --build-arg PREP_IMAGE=$(ROS2_PREP_IMAGE) -t $(ROS2_IMAGE) $(ROS2_REMOTE_BUILD_DIR)"
+docker-build-ros2-jetson: check-network ship-context
+	@echo "[1/2] Building BHT image natively on Jetson..."
+	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "cd $(ROS2_REMOTE_BUILD_DIR) && docker build --network=host -f dockerfiles/bht.native.Dockerfile -t $(ROS2_IMAGE) ."
+	@echo "[2/2] Build complete. Image: $(ROS2_IMAGE)"
 
 .PHONY: docker-run-ros2-jetson
 
