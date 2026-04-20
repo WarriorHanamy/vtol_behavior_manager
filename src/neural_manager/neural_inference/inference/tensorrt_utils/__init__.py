@@ -1,5 +1,4 @@
-"""
-TensorRT utilities for neural inference.
+"""TensorRT utilities for neural inference.
 
 This module provides TensorRT-accelerated inference implementations.
 TensorRT engines must be built from ONNX models using tensorrt_builder.py.

@@ -1,5 +1,4 @@
-"""
-Test for RevisionDiscoverer export from features module.
+"""Test for RevisionDiscoverer export from features module.
 """
 
 import sys
@@ -7,7 +6,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-import pytest
 
 import neural_manager.neural_inference.features as features
 from neural_manager.neural_inference.features import RevisionDiscoverer
@@ -41,7 +39,6 @@ class TestExportRevisionDiscoverer:
 
   def test_revision_discoverer_matches_imported_class(self):
     """Test that RevisionDiscoverer in __all__ matches the imported class."""
-
     # Should match
     assert features.__all__.count("RevisionDiscoverer") == 1
     assert features.RevisionDiscoverer is RevisionDiscoverer

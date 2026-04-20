@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -14,12 +13,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 
 class RevisionDiscoverer:
-  """
-  Discoverer for finding the latest model revision by timestamp.
+  """Discoverer for finding the latest model revision by timestamp.
 
   This class scans policies/<task>/ directories and returns the latest
   revision based on timestamp extracted from directory names.
@@ -30,8 +27,7 @@ class RevisionDiscoverer:
 
   @staticmethod
   def discover_latest(artifacts_root: Path | str, task: str) -> Path | None:
-    """
-    Discover the latest revision for a given task.
+    """Discover the latest revision for a given task.
 
     Scans <artifacts_root>/policies/<task>/ directory, filters valid
     revisions (both model.onnx and observations_metadata.yaml present),
@@ -50,6 +46,7 @@ class RevisionDiscoverer:
         >>> latest = RevisionDiscoverer.discover_latest("/path/to/artifacts", "vtol_hover")
         >>> print(latest)
         /path/to/artifacts/policies/vtol_hover/vtol_hover-20260303T110451Z-abc123
+
     """
     artifacts_root = Path(artifacts_root)
     task_dir = artifacts_root / "policies" / task
@@ -84,8 +81,7 @@ class RevisionDiscoverer:
 
   @staticmethod
   def _parse_revision_name(revision_dir_name: str) -> datetime | None:
-    """
-    Extract timestamp from revision directory name.
+    """Extract timestamp from revision directory name.
 
     Revision directory name format: {task_name}-{timestamp}-{hash}
     Timestamp format: YYYYMMDDTHHMMSSZ (ISO 8601 compact format)
@@ -99,6 +95,7 @@ class RevisionDiscoverer:
     Examples:
         >>> RevisionDiscoverer._parse_revision_name("vtol_hover-20260303T110451Z-abc123")
         datetime.datetime(2026, 3, 3, 11, 4, 51, tzinfo=datetime.timezone.utc)
+
     """
     try:
       # Split by dash and extract timestamp part
@@ -129,8 +126,7 @@ class RevisionDiscoverer:
 
   @staticmethod
   def _validate_revision(revision_path: Path) -> bool:
-    """
-    Validate that a revision directory contains required files.
+    """Validate that a revision directory contains required files.
 
     Checks that both model.onnx and observations_metadata.yaml exist
     in the revision directory.
@@ -144,6 +140,7 @@ class RevisionDiscoverer:
     Examples:
         >>> RevisionDiscoverer._validate_revision(Path("/path/to/revision"))
         True
+
     """
     model_path = revision_path / "model.onnx"
     metadata_path = revision_path / "observations_metadata.yaml"

@@ -1,5 +1,4 @@
-"""
-Test for _load_metadata() parsing low_dim format (FR-3).
+"""Test for _load_metadata() parsing low_dim format (FR-3).
 """
 
 import sys
@@ -8,8 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import tempfile
-
-import pytest
 
 from neural_manager.neural_inference.features.feature_provider_base import FeatureProviderBase
 

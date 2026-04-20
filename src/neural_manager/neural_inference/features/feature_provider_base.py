@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -14,7 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import yaml
@@ -28,12 +26,12 @@ from .revision_discoverer import RevisionDiscoverer
 
 @dataclass
 class FeatureSpec:
-  """
-  Specification for a single feature.
+  """Specification for a single feature.
 
   Attributes:
       name: Feature name
       dim: Feature dimension
+
   """
 
   name: str
@@ -42,8 +40,7 @@ class FeatureSpec:
 
 @dataclass
 class FeatureValidationResult:
-  """
-  Result of validating a feature implementation.
+  """Result of validating a feature implementation.
 
   Attributes:
       feature_name: Name of the feature being validated
@@ -51,6 +48,7 @@ class FeatureValidationResult:
       error_message: Error message if validation failed
       expected_dim: Expected dimension from metadata
       actual_dim: Actual dimension from implementation
+
   """
 
   feature_name: str
@@ -66,8 +64,7 @@ class FeatureValidationResult:
 
 
 class FeatureProviderBase:
-  """
-  Base class for feature providers with auto-validation and convention-based discovery.
+  """Base class for feature providers with auto-validation and convention-based discovery.
 
   This class provides:
   1. Automatic validation of feature implementations against metadata
@@ -77,11 +74,11 @@ class FeatureProviderBase:
   """
 
   def __init__(self, metadata_path: Path | str):
-    """
-    Initialize the feature provider.
+    """Initialize the feature provider.
 
     Args:
         metadata_path: Path to observation_metadata.yaml file
+
     """
     self._metadata_path = Path(metadata_path)
     self._metadata: list[FeatureSpec] = []
@@ -98,8 +95,7 @@ class FeatureProviderBase:
 
   @classmethod
   def from_latest_revision(cls, artifacts_root: Path | str, task: str):
-    """
-    Create a FeatureProviderBase instance by auto-discovering the latest revision.
+    """Create a FeatureProviderBase instance by auto-discovering the latest revision.
 
     This method uses RevisionDiscoverer to find the latest valid revision for
     the given task, then initializes a FeatureProviderBase instance with the
@@ -119,6 +115,7 @@ class FeatureProviderBase:
         >>> provider = FeatureProviderBase.from_latest_revision(
         ...     "/path/to/artifacts", "vtol_hover"
         ... )
+
     """
     # Discover the latest revision
     latest_revision = RevisionDiscoverer.discover_latest(artifacts_root, task)
@@ -138,13 +135,13 @@ class FeatureProviderBase:
     return cls(metadata_path)
 
   def _load_metadata(self) -> list[FeatureSpec]:
-    """
-    Parse observation_metadata.yaml and return list of FeatureSpec.
+    """Parse observation_metadata.yaml and return list of FeatureSpec.
 
     Expects format: {'low_dim': [{'name': '...', 'dim': N}, ...]}
 
     Returns:
         list of FeatureSpec objects parsed from metadata file
+
     """
     with open(self._metadata_path) as f:
       data = yaml.safe_load(f)
@@ -160,8 +157,7 @@ class FeatureProviderBase:
     return features
 
   def _validate_implementations(self) -> list[FeatureValidationResult]:
-    """
-    Validate feature implementations using convention-based discovery.
+    """Validate feature implementations using convention-based discovery.
 
     Discovers feature methods using get_{feature_name} convention and
     validates that implementation output dimension matches metadata.
@@ -171,6 +167,7 @@ class FeatureProviderBase:
 
     Raises:
         RuntimeError: If any feature validation fails
+
     """
     results = []
 
@@ -238,14 +235,14 @@ class FeatureProviderBase:
   def _raise_on_validation_failure(
     results: list[FeatureValidationResult],
   ) -> None:
-    """
-    Raise RuntimeError if any validation failed.
+    """Raise RuntimeError if any validation failed.
 
     Args:
         results: list of FeatureValidationResult objects
 
     Raises:
         RuntimeError: If any feature validation fails
+
     """
     failed_results = [r for r in results if not r.passed]
     if not failed_results:
@@ -258,11 +255,11 @@ class FeatureProviderBase:
     raise RuntimeError("\n".join(error_lines))
 
   def _print_validation_report(self, results: list[FeatureValidationResult]) -> None:
-    """
-    Print clear pass/fail indicators for each feature.
+    """Print clear pass/fail indicators for each feature.
 
     Args:
         results: list of FeatureValidationResult objects
+
     """
     print("\n" + "=" * 60)
     print("Feature Validation Report")
@@ -286,19 +283,18 @@ class FeatureProviderBase:
     print("=" * 60 + "\n")
 
   def get_all_features(self) -> np.ndarray:
-    """
-    Concatenate all features in metadata order.
+    """Concatenate all features in metadata order.
 
     Returns:
         Numpy array with all features concatenated
+
     """
     features_list = [getattr(self, f"get_{spec.name}")() for spec in self._metadata]
 
     return np.concatenate(features_list)
 
   def get_feature(self, name: str) -> np.ndarray:
-    """
-    Retrieve a single feature by name with error checking.
+    """Retrieve a single feature by name with error checking.
 
     Args:
         name: Name of the feature to retrieve
@@ -308,6 +304,7 @@ class FeatureProviderBase:
 
     Raises:
         ValueError: If feature name is not found in metadata
+
     """
     # Check if feature exists in metadata
     spec = next((s for s in self._metadata if s.name == name), None)
@@ -330,19 +327,19 @@ class FeatureProviderBase:
     return feature
 
   def get_feature_specs(self) -> list[FeatureSpec]:
-    """
-    Get feature specifications list.
+    """Get feature specifications list.
 
     Returns:
         list of FeatureSpec objects
+
     """
     return self._metadata.copy()
 
   def get_validation_report(self) -> list[FeatureValidationResult]:
-    """
-    Get validation results for programmatic access.
+    """Get validation results for programmatic access.
 
     Returns:
         list of FeatureValidationResult objects
+
     """
     return self._validation_results

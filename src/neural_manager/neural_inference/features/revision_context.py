@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -22,8 +21,7 @@ from .revision_discoverer import RevisionDiscoverer
 
 @dataclass
 class RevisionContext:
-  """
-  Holds discovered revision paths and metadata.
+  """Holds discovered revision paths and metadata.
 
   This class encapsulates all information needed to run inference
   with a discovered model revision, including paths and dimensions.
@@ -39,8 +37,7 @@ class RevisionContext:
 
   @classmethod
   def from_discovery(cls, artifacts_root: Path | str, task: str) -> RevisionContext:
-    """
-    Create RevisionContext by discovering the latest revision.
+    """Create RevisionContext by discovering the latest revision.
 
     Args:
         artifacts_root: Base directory containing policies/ subdirectory
@@ -51,6 +48,7 @@ class RevisionContext:
 
     Raises:
         FileNotFoundError: If no valid revision is found
+
     """
     artifacts_root = Path(artifacts_root)
 

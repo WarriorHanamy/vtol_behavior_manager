@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -15,7 +14,7 @@ Fixed message format on /neural/control topic:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -36,13 +35,13 @@ except ImportError:
 
 @dataclass
 class NeuralControlMessage:
-  """
-  Simple mock message class for neural control when ROS2 is not available.
+  """Simple mock message class for neural control when ROS2 is not available.
 
   Attributes:
       timestamp: Message timestamp in microseconds
       acc_p_z: Z-axis acceleration in m/s²
       bodyrate: 3D angular velocity [wx, wy, wz] in rad/s
+
   """
 
   timestamp: int = 0
@@ -55,8 +54,7 @@ class NeuralControlMessage:
 
 
 class ControlPublisher:
-  """
-  Publisher for neural network control outputs.
+  """Publisher for neural network control outputs.
 
   Publishes control messages to /neural/control topic with fixed format:
   - acc_p_z: Z-axis acceleration [m/s²]
@@ -69,12 +67,12 @@ class ControlPublisher:
   TOPIC_NAME = "/neural/control"
 
   def __init__(self, node: Any | None = None):
-    """
-    Initialize the control publisher.
+    """Initialize the control publisher.
 
     Args:
         node: Optional ROS2 node for creating publishers.
               If None, publisher will not be initialized until initialize() is called.
+
     """
     self._node = node
     self._publisher = None
@@ -82,11 +80,11 @@ class ControlPublisher:
     self._publish_count = 0
 
   def initialize(self) -> bool:
-    """
-    Initialize the publisher if a ROS2 node was provided.
+    """Initialize the publisher if a ROS2 node was provided.
 
     Returns:
         True if publisher was successfully initialized, False otherwise.
+
     """
     if self._is_initialized:
       return True
@@ -115,8 +113,7 @@ class ControlPublisher:
       return False
 
   def create_control_message(self, acc_p_z: float, bodyrate: np.ndarray, timestamp: int) -> Any:
-    """
-    Create a control message with the given parameters.
+    """Create a control message with the given parameters.
 
     Args:
         acc_p_z: Z-axis acceleration in m/s²
@@ -125,6 +122,7 @@ class ControlPublisher:
 
     Returns:
         VehicleAccRatesSetpoint if ROS2 available, otherwise NeuralControlMessage
+
     """
     # Validate inputs
     if not np.isfinite(acc_p_z):
@@ -152,8 +150,7 @@ class ControlPublisher:
       return NeuralControlMessage(timestamp=timestamp, acc_p_z=float(acc_p_z), bodyrate=bodyrate.copy())
 
   def publish(self, acc_p_z: float, bodyrate: np.ndarray, timestamp: int) -> bool:
-    """
-    Create and publish a control message.
+    """Create and publish a control message.
 
     Args:
         acc_p_z: Z-axis acceleration in m/s²
@@ -162,6 +159,7 @@ class ControlPublisher:
 
     Returns:
         True if message was published, False otherwise
+
     """
     # Create message
     msg = self.create_control_message(acc_p_z, bodyrate, timestamp)
@@ -179,20 +177,20 @@ class ControlPublisher:
     return False
 
   def is_initialized(self) -> bool:
-    """
-    Check if the publisher is initialized.
+    """Check if the publisher is initialized.
 
     Returns:
         True if publisher is initialized, False otherwise
+
     """
     return self._is_initialized
 
   def get_publish_count(self) -> int:
-    """
-    Get the number of messages published.
+    """Get the number of messages published.
 
     Returns:
         Number of published messages
+
     """
     return self._publish_count
 

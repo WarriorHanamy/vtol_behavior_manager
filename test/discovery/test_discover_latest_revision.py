@@ -1,5 +1,4 @@
-"""
-Test for RevisionDiscoverer discover_latest() method.
+"""Test for RevisionDiscoverer discover_latest() method.
 """
 
 import sys
@@ -8,9 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import tempfile
-from datetime import datetime
-
-import pytest
 
 from neural_manager.neural_inference.features.revision_discoverer import RevisionDiscoverer
 

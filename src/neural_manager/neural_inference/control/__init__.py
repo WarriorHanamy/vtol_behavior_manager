@@ -1,5 +1,4 @@
-"""
-Control layer components for neural inference module.
+"""Control layer components for neural inference module.
 
 This module provides control output functionality including:
 - Action post-processor for converting neural network output to PX4 commands

@@ -34,11 +34,11 @@ protected:
   {
   }
 
-  void onActivate() override
-  {
-    //TODO 检查条件是否满足启动
-    RCLCPP_INFO(node().get_logger(), "ExecutorEntryMode activated");
-  }
+   void onActivate() override
+   {
+     // TODO Check if conditions are met for startup
+     RCLCPP_INFO(node().get_logger(), "ExecutorEntryMode activated");
+   }
 
   void onDeactivate() override
   {

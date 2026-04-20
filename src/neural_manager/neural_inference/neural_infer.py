@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -196,7 +195,7 @@ def main(cfg: DictConfig) -> int:
     rclpy.shutdown()
     return 1
   except KeyboardInterrupt:
-    print("用户中断，正在关闭...")
+    print("User interrupted, shutting down...")
   except Exception as e:
     print(f"❌ Node error: {e}")
     rclpy.shutdown()

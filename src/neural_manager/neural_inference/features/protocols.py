@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -12,14 +11,13 @@ This module defines protocols for component interfaces.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol, Union
+from typing import Any, Protocol
 
 from rclpy.qos import QoSProfile
 
 
 class InferenceNodeProtocol(Protocol):
-  """
-  Protocol for neural inference node that VtolFeatureProvider interacts with.
+  """Protocol for neural inference node that VtolFeatureProvider interacts with.
 
   Defines the contract between feature provider and inference node,
   enabling loose coupling through structural subtyping.
@@ -36,8 +34,7 @@ class InferenceNodeProtocol(Protocol):
     ...
 
   def run_inference(self) -> None:
-    """
-    Run neural inference and publish control command.
+    """Run neural inference and publish control command.
 
     Called by feature provider when sensor data is updated.
     Implementation should:

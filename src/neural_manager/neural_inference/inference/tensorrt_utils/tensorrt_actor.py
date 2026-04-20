@@ -1,5 +1,4 @@
-"""
-TensorRT inference actors for neural_pos_ctrl.
+"""TensorRT inference actors for neural_pos_ctrl.
 
 This module provides TensorRT-accelerated inference implementations
 for GRU and MLP policy actors using cuda-python for GPU memory management.
@@ -90,8 +89,7 @@ def _cuda_init():
 
 
 class TensorRTPolicyActor(BasePolicyActor):
-  """
-  Base class for TensorRT inference actors.
+  """Base class for TensorRT inference actors.
 
   Provides common functionality for loading TensorRT engines and
   running inference with CUDA streams.
@@ -108,14 +106,14 @@ class TensorRTPolicyActor(BasePolicyActor):
     max_batch_size: int = 1,
     enable_fp16: bool = True,
   ):
-    """
-    Initialize TensorRT policy actor.
+    """Initialize TensorRT policy actor.
 
     Args:
         engine_path: Path to TensorRT engine file
         node_logger: ROS2 node logger for structured logging
         max_batch_size: Maximum batch size for inference
         enable_fp16: Whether FP16 mode is enabled
+
     """
     if not TRT_AVAILABLE:
       raise ImportError("TensorRT is not available. Install with: pip install tensorrt-cu12")
@@ -299,8 +297,7 @@ class TensorRTPolicyActor(BasePolicyActor):
 
 
 class TensorRTGRUActor(TensorRTPolicyActor):
-  """
-  GRU-based policy actor using TensorRT engine.
+  """GRU-based policy actor using TensorRT engine.
 
   Handles models with recurrent hidden state (GRU layers).
   Manages hidden state I/O tensors for sequential inference.
@@ -364,14 +361,14 @@ class TensorRTGRUActor(TensorRTPolicyActor):
     self.reset_stats()
 
   def __call__(self, obs: np.ndarray) -> np.ndarray:
-    """
-    Execute inference.
+    """Execute inference.
 
     Args:
         obs: Single observation or batch of observations
 
     Returns:
         Action(s) from the GRU model
+
     """
     if obs.ndim == 1:
       obs = obs[None, :]
@@ -413,8 +410,7 @@ class TensorRTGRUActor(TensorRTPolicyActor):
 
 
 class TensorRTMLPActor(TensorRTPolicyActor):
-  """
-  MLP-based policy actor using TensorRT engine.
+  """MLP-based policy actor using TensorRT engine.
 
   Handles feedforward models without recurrent state.
   Processes observation history (stacked observations) as input.
@@ -466,14 +462,14 @@ class TensorRTMLPActor(TensorRTPolicyActor):
     self.reset_stats()
 
   def __call__(self, obs: np.ndarray) -> np.ndarray:
-    """
-    Execute inference.
+    """Execute inference.
 
     Args:
         obs: Observation history stack, shape (stacked_obs_dim,) or (batch_size, stacked_obs_dim)
 
     Returns:
         Action, shape (action_dim,) or (batch_size, action_dim)
+
     """
     if obs.ndim == 1:
       obs = obs[None, :]

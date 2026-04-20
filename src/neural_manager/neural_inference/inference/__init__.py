@@ -1,5 +1,4 @@
-"""
-Inference layer components for neural inference module.
+"""Inference layer components for neural inference module.
 
 This module provides neural network inference functionality including:
 - Policy actors (ONNX Runtime and TensorRT)

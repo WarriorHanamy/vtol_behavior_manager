@@ -1,5 +1,4 @@
-"""
-Inference provider abstraction for neural_pos_ctrl.
+"""Inference provider abstraction for neural_pos_ctrl.
 
 This module provides a unified interface for different inference backends
 (ONNX Runtime, TensorRT) with automatic fallback support.
@@ -16,26 +15,25 @@ Architecture:
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
 
 class InferenceProvider(ABC):
-  """
-  Abstract base class for inference backends.
+  """Abstract base class for inference backends.
 
   All inference providers must implement this interface to ensure
   compatibility with the neural control pipeline.
   """
 
   def __init__(self, model_path: Path, node_logger=None):
-    """
-    Initialize the inference provider.
+    """Initialize the inference provider.
 
     Args:
         model_path: Path to the model file (ONNX or TensorRT engine)
         node_logger: ROS2 node logger for structured logging
+
     """
     self._model_path = Path(model_path)
     self._logger = node_logger
@@ -45,24 +43,24 @@ class InferenceProvider(ABC):
 
   @abstractmethod
   def load_model(self) -> bool:
-    """
-    Load the model from disk.
+    """Load the model from disk.
 
     Returns:
         True if model loaded successfully, False otherwise
+
     """
     pass
 
   @abstractmethod
   def infer(self, observation: np.ndarray) -> np.ndarray:
-    """
-    Run inference on an observation.
+    """Run inference on an observation.
 
     Args:
         observation: Input observation array
 
     Returns:
         Action array from the model
+
     """
     pass
 
@@ -73,21 +71,21 @@ class InferenceProvider(ABC):
 
   @abstractmethod
   def get_input_shape(self) -> tuple[int, ...]:
-    """
-    Get expected input shape.
+    """Get expected input shape.
 
     Returns:
         Tuple of input dimensions
+
     """
     pass
 
   @abstractmethod
   def get_output_shape(self) -> tuple[int, ...]:
-    """
-    Get expected output shape.
+    """Get expected output shape.
 
     Returns:
         Tuple of output dimensions
+
     """
     pass
 
@@ -113,24 +111,24 @@ class InferenceProvider(ABC):
       print(f"[ERROR] {msg}")
 
   def _log_inference_time(self, inference_time_ms: float):
-    """
-    Log inference performance metrics.
+    """Log inference performance metrics.
 
     Args:
         inference_time_ms: Inference time in milliseconds
+
     """
     self._inference_count += 1
     self._total_inference_time += inference_time_ms
 
-    log_msg = f"🧠 神经网络推理耗时: {inference_time_ms:.2f} ms"
+    log_msg = f"🧠 Neural network inference time: {inference_time_ms:.2f} ms"
     self._log_info(log_msg)
 
   def get_inference_stats(self) -> dict[str, Any]:
-    """
-    Get inference performance statistics.
+    """Get inference performance statistics.
 
     Returns:
         Dictionary containing inference statistics
+
     """
     current_time = time.time()
     uptime = current_time - self._start_time
@@ -151,8 +149,7 @@ class InferenceProvider(ABC):
 
 
 class ONNXProvider(InferenceProvider):
-  """
-  ONNX Runtime inference provider.
+  """ONNX Runtime inference provider.
 
   Wraps the existing ONNX actor implementations (GRUPolicyActor, MLPPolicyActor)
   to provide a unified interface.
@@ -169,8 +166,7 @@ class ONNXProvider(InferenceProvider):
     expected_output_shape: tuple[int, ...] | None = None,
     node_logger=None,
   ):
-    """
-    Initialize ONNX Runtime provider.
+    """Initialize ONNX Runtime provider.
 
     Args:
         onnx_path: Path to ONNX model file
@@ -181,6 +177,7 @@ class ONNXProvider(InferenceProvider):
         expected_input_shape: Expected input shape for validation
         expected_output_shape: Expected output shape for validation
         node_logger: ROS2 node logger
+
     """
     super().__init__(onnx_path, node_logger)
 
@@ -266,8 +263,7 @@ class ONNXProvider(InferenceProvider):
 
 
 class TensorRTProvider(InferenceProvider):
-  """
-  TensorRT inference provider.
+  """TensorRT inference provider.
 
   Provides TensorRT-accelerated inference for deployment.
   Falls back gracefully if TensorRT is not available.
@@ -283,8 +279,7 @@ class TensorRTProvider(InferenceProvider):
     expected_output_shape: tuple[int, ...] | None = None,
     node_logger=None,
   ):
-    """
-    Initialize TensorRT provider.
+    """Initialize TensorRT provider.
 
     Args:
         engine_path: Path to TensorRT engine file
@@ -294,6 +289,7 @@ class TensorRTProvider(InferenceProvider):
         expected_input_shape: Expected input shape for validation
         expected_output_shape: Expected output shape for validation
         node_logger: ROS2 node logger
+
     """
     super().__init__(engine_path, node_logger)
 
@@ -332,9 +328,13 @@ class TensorRTProvider(InferenceProvider):
 
     try:
       if self._actor_type == "gru":
-        self._actor = self._gru_actor_class(self._model_path, node_logger=self._logger, **self._actor_config)
+        self._actor = self._gru_actor_class(
+          self._model_path, node_logger=self._logger, **self._actor_config
+        )
       elif self._actor_type == "mlp":
-        self._actor = self._mlp_actor_class(self._model_path, node_logger=self._logger, **self._actor_config)
+        self._actor = self._mlp_actor_class(
+          self._model_path, node_logger=self._logger, **self._actor_config
+        )
       else:
         self._log_error(f"Unknown actor type: {self._actor_type}")
         return False
@@ -372,8 +372,7 @@ class TensorRTProvider(InferenceProvider):
 
 
 class InferenceProviderFactory:
-  """
-  Factory for creating inference providers with automatic fallback.
+  """Factory for creating inference providers with automatic fallback.
 
   Fallback chain:
       1. TensorRT (if engine exists and available)
@@ -402,8 +401,7 @@ class InferenceProviderFactory:
     expected_output_shape: tuple[int, ...] | None = None,
     node_logger=None,
   ) -> InferenceProvider | None:
-    """
-    Create an inference provider with automatic fallback.
+    """Create an inference provider with automatic fallback.
 
     Args:
         preferred_backends: List of backend preferences in order
@@ -418,6 +416,7 @@ class InferenceProviderFactory:
 
     Returns:
         InferenceProvider instance or None if all backends fail
+
     """
     if engine_path is None:
       # Default engine path next to ONNX model
@@ -477,20 +476,20 @@ class InferenceProviderFactory:
 
   @staticmethod
   def get_default_backends() -> list[str]:
-    """
-    Get default backend preference list.
+    """Get default backend preference list.
 
     Returns:
         List of backend names in preference order
+
     """
     return ["tensorrt", "onnx_cuda", "onnx_cpu"]
 
   @staticmethod
   def get_cpu_only_backends() -> list[str]:
-    """
-    Get CPU-only backend list.
+    """Get CPU-only backend list.
 
     Returns:
         List of CPU-only backends
+
     """
     return ["onnx_cpu"]

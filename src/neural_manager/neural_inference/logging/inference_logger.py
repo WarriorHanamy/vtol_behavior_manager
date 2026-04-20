@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025, Differential Robotics
+"""Copyright (c) 2025, Differential Robotics
 All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
@@ -20,8 +19,7 @@ from rclpy.impl.rcutils_logger import RcutilsLogger
 
 
 class InferenceLogger:
-  """
-  Centralized logger for neural inference data.
+  """Centralized logger for neural inference data.
 
   Logs:
   - Features (observation vector components) - to file
@@ -36,8 +34,7 @@ class InferenceLogger:
     enable_features: bool = False,
     features_log_file: str | None = None,
   ):
-    """
-    Initialize the inference logger.
+    """Initialize the inference logger.
 
     Args:
         logger: ROS2 logger instance
@@ -45,6 +42,7 @@ class InferenceLogger:
         enable_output: Whether to log output results
         enable_features: Whether to log features to file
         features_log_file: Path to features log file (default: /tmp/neural_features.log)
+
     """
     self._logger = logger
     self._log_interval = log_interval
@@ -64,8 +62,7 @@ class InferenceLogger:
     frd_ang_vel: np.ndarray,
     enu_to_target: np.ndarray | None = None,
   ) -> None:
-    """
-    Log output results after inference.
+    """Log output results after inference.
 
     Args:
         raw_action: Raw action from neural network [thrust, roll_rate, pitch_rate, yaw_rate]
@@ -73,6 +70,7 @@ class InferenceLogger:
         flu_ang_vel: Processed angular rates in FLU frame [roll, pitch, yaw] rad/s
         frd_ang_vel: Processed angular rates in FRD frame [roll, pitch, yaw] rad/s
         enu_to_target: Target error vector in ENU frame [e, n, -d] (meters)
+
     """
     self._step_count += 1
 
@@ -112,12 +110,12 @@ class InferenceLogger:
     obs: np.ndarray,
     feature_specs: list,
   ) -> None:
-    """
-    Log feature vector components to file only.
+    """Log feature vector components to file only.
 
     Args:
         obs: Full observation vector
         feature_specs: List of FeatureSpec with name and dim
+
     """
     if not self._enable_features:
       return

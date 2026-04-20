@@ -1,5 +1,4 @@
-"""
-TensorRT engine builder for neural_pos_ctrl.
+"""TensorRT engine builder for neural_pos_ctrl.
 
 This module provides utilities for building TensorRT engines from ONNX models.
 TensorRT engines provide optimized inference performance on NVIDIA GPUs.
@@ -24,7 +23,7 @@ Reference:
 import hashlib
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 try:
   import tensorrt as trt
@@ -59,8 +58,7 @@ class BuilderConfig:
     strict_type_constraints: bool = False,
     keep_outputs: bool = False,
   ):
-    """
-    Initialize builder configuration.
+    """Initialize builder configuration.
 
     Args:
         max_batch_size: Maximum batch size for dynamic batching
@@ -70,6 +68,7 @@ class BuilderConfig:
         int8_calibrator: INT8 calibrator for quantization
         strict_type_constraints: Use strict type constraints
         keep_outputs: Keep intermediate layer outputs
+
     """
     self.max_batch_size = max_batch_size
     self.max_workspace_size = max_workspace_size
@@ -138,8 +137,7 @@ def build_tensorrt_engine(
   config: BuilderConfig | None = None,
   log_func: callable | None = None,
 ) -> bool:
-  """
-  Build a TensorRT engine from an ONNX model.
+  """Build a TensorRT engine from an ONNX model.
 
   Args:
       onnx_path: Path to input ONNX model file
@@ -156,6 +154,7 @@ def build_tensorrt_engine(
       ...     engine_path=Path("models/policy.trt"),
       ...     config=BuilderConfig.fp16()
       ... )
+
   """
   if not TRT_AVAILABLE:
     if log_func:
@@ -284,8 +283,7 @@ def build_tensorrt_engine_with_fallback(
   config: BuilderConfig | None = None,
   log_func: callable | None = None,
 ) -> bool:
-  """
-  Build TensorRT engine with automatic fallback to FP16 if FP8 fails.
+  """Build TensorRT engine with automatic fallback to FP16 if FP8 fails.
 
   Args:
       onnx_path: Path to input ONNX model file
@@ -295,6 +293,7 @@ def build_tensorrt_engine_with_fallback(
 
   Returns:
       True if engine built successfully, False otherwise
+
   """
   if config is None:
     config = BuilderConfig.default()
@@ -329,14 +328,14 @@ def build_tensorrt_engine_with_fallback(
 
 
 def get_model_hash(model_path: Path) -> str:
-  """
-  Get hash of a model file for version tracking.
+  """Get hash of a model file for version tracking.
 
   Args:
       model_path: Path to model file (ONNX or TensorRT engine)
 
   Returns:
       MD5 hash of the file
+
   """
   model_path = Path(model_path)
   if not model_path.exists():
@@ -355,8 +354,7 @@ def engine_exists_and_valid(
   check_hash: bool = True,
   log_func: callable | None = None,
 ) -> bool:
-  """
-  Check if TensorRT engine exists and matches the ONNX model.
+  """Check if TensorRT engine exists and matches the ONNX model.
 
   Args:
       engine_path: Path to TensorRT engine file
@@ -366,6 +364,7 @@ def engine_exists_and_valid(
 
   Returns:
       True if engine exists and is valid, False otherwise
+
   """
   engine_path = Path(engine_path)
   onnx_path = Path(onnx_path)
@@ -407,8 +406,7 @@ def update_engine_metadata(
   onnx_path: Path,
   config: BuilderConfig | None = None,
 ) -> bool:
-  """
-  Update engine metadata file with ONNX hash and build config.
+  """Update engine metadata file with ONNX hash and build config.
 
   Args:
       engine_path: Path to TensorRT engine file
@@ -417,6 +415,7 @@ def update_engine_metadata(
 
   Returns:
       True if metadata updated successfully
+
   """
   try:
     engine_path = Path(engine_path)
@@ -444,8 +443,7 @@ def build_or_load_engine(
   force_rebuild: bool = False,
   log_func: callable | None = None,
 ) -> bool:
-  """
-  Build TensorRT engine if it doesn't exist or is outdated.
+  """Build TensorRT engine if it doesn't exist or is outdated.
 
   Args:
       onnx_path: Path to ONNX model file
@@ -456,6 +454,7 @@ def build_or_load_engine(
 
   Returns:
       True if engine is ready to use, False otherwise
+
   """
   onnx_path = Path(onnx_path)
   engine_path = Path(engine_path)
@@ -487,8 +486,7 @@ def _log(log_func: callable | None, msg: str):
 
 
 def get_engine_info(engine_path: Path, log_func: callable | None = None) -> dict[str, Any] | None:
-  """
-  Get information about a TensorRT engine.
+  """Get information about a TensorRT engine.
 
   Args:
       engine_path: Path to TensorRT engine file
@@ -496,6 +494,7 @@ def get_engine_info(engine_path: Path, log_func: callable | None = None) -> dict
 
   Returns:
       Dictionary with engine information or None if failed
+
   """
   if not TRT_AVAILABLE:
     return None
@@ -549,14 +548,14 @@ def get_engine_info(engine_path: Path, log_func: callable | None = None) -> dict
 
 
 def list_available_devices(log_func: callable | None = None) -> list[str]:
-  """
-  List available CUDA devices for TensorRT.
+  """List available CUDA devices for TensorRT.
 
   Args:
       log_func: Optional logging function
 
   Returns:
       List of device names
+
   """
   devices = []
 

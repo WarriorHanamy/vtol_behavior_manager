@@ -1,5 +1,4 @@
-"""
-Test for FeatureProviderBase.from_latest_revision() class method.
+"""Test for FeatureProviderBase.from_latest_revision() class method.
 """
 
 import sys
@@ -8,13 +7,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import tempfile
-from datetime import datetime
 
 import pytest
 import yaml
 
 from neural_manager.neural_inference.features.feature_provider_base import FeatureProviderBase
-from neural_manager.neural_inference.features.revision_discoverer import RevisionDiscoverer
 
 
 class MockFeatureProvider(FeatureProviderBase):
@@ -34,8 +31,7 @@ class TestFromLatestRevision:
   """Test that from_latest_revision() discovers and initializes from latest revision."""
 
   def test_valid_revisions_returns_initialized_provider(self):
-    """
-    Test that from_latest_revision() returns a properly initialized provider
+    """Test that from_latest_revision() returns a properly initialized provider
     instance when valid revisions exist.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -79,8 +75,7 @@ class TestFromLatestRevision:
       assert all(result.passed for result in provider._validation_results)
 
   def test_no_valid_revisions_raises_file_not_found(self):
-    """
-    Test that from_latest_revision() raises FileNotFoundError with clear message
+    """Test that from_latest_revision() raises FileNotFoundError with clear message
     when no valid revisions exist.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -102,8 +97,7 @@ class TestFromLatestRevision:
       assert task in error_message
 
   def test_multiple_revisions_selects_latest_timestamp(self):
-    """
-    Test that from_latest_revision() selects the revision with the latest
+    """Test that from_latest_revision() selects the revision with the latest
     timestamp when multiple valid revisions exist.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -146,8 +140,7 @@ class TestFromLatestRevision:
       assert provider._metadata_path == revisions[-1] / "observations_metadata.yaml"
 
   def test_missing_task_directory_raises_file_not_found(self):
-    """
-    Test that from_latest_revision() raises FileNotFoundError when task
+    """Test that from_latest_revision() raises FileNotFoundError when task
     directory does not exist.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -165,8 +158,7 @@ class TestFromLatestRevision:
       assert "No valid revision found" in error_message
 
   def test_string_artifacts_root_path_works(self):
-    """
-    Test that from_latest_revision() works with string path for artifacts_root.
+    """Test that from_latest_revision() works with string path for artifacts_root.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
       artifacts_root = tmpdir  # String, not Path

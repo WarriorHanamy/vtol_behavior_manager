@@ -1,5 +1,4 @@
-"""
-Test for RevisionDiscoverer _validate_revision() method.
+"""Test for RevisionDiscoverer _validate_revision() method.
 """
 
 import sys
@@ -8,8 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import tempfile
-
-import pytest
 
 from neural_manager.neural_inference.features.revision_discoverer import RevisionDiscoverer
 

@@ -78,8 +78,8 @@ class ActionPostProcessor:
         Vector3Stamped, "/neural/angular_rate_command_frd", 10
       )
       if self._logger:
-        self._logger.info("📡 动作后处理器话题: /neural/angular_rate_command_flu (body_flu)")
-        self._logger.info("📡 动作后处理器话题: /neural/angular_rate_command_frd (body_frd)")
+         self._logger.info("📡 Action post-processor topic: /neural/angular_rate_command_flu (body_flu)")
+        self._logger.info("📡 Action post-processor topic: /neural/angular_rate_command_frd (body_frd)")
 
     if action_limits is None:
       action_limits = {"min": -1.0, "max": 1.0}
@@ -342,7 +342,7 @@ class ActionPostProcessor:
     print(f"{prefix}  ⬆️  推力加速度:     {thrust_acc:.3f} m/s² (原始: {thrust_raw:.3f})")
     roll_rate = action_display_dict["roll_rate"]
     roll_rate_raw = action_display_dict["roll_rate_raw"]
-    print(f"{prefix}  🔄 横滚角速度:     {roll_rate:.3f} rad/s (原始: {roll_rate_raw:.3f})")
+    print(f"{prefix}  🔄 Roll rate:     {roll_rate:.3f} rad/s (raw: {roll_rate_raw:.3f})")
     pitch_rate = action_display_dict["pitch_rate"]
     pitch_rate_raw = action_display_dict["pitch_rate_raw"]
     print(f"{prefix}  🔄 俯仰角速度:     {pitch_rate:.3f} rad/s (原始: {pitch_rate_raw:.3f})")
@@ -404,4 +404,4 @@ class ActionPostProcessor:
     self._last_action = np.zeros(4, dtype=np.float32)
     self._last_thrust_acc = 0.0
     self._last_frd_ang_vel = np.zeros(3, dtype=np.float32)
-    self._control_command_count = 0
+    self._control_command_count = 0 

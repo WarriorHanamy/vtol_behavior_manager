@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-"""
-Test Neural Executor Launch File
+"""Test Neural Executor Launch File
 
 This launch file starts the Test Neural Executor system with:
 - Test Neural Executor Node using TestNeuralManualMode
@@ -9,7 +8,6 @@ This launch file starts the Test Neural Executor system with:
 - Comprehensive failsafe mechanisms
 """
 
-import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
