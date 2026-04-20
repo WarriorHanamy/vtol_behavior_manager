@@ -10,7 +10,7 @@ model:
   task: "vtol_hover"
   inference:
     backend: "onnx"
-    providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    providers: ["CPUExecutionProvider"]
     engine_path: ""
 
 control:
@@ -28,9 +28,9 @@ debug:
   enabled: false
   verbose_logging: false
   measure_inference_time: true
-  print_observation: true
-  print_control: true
+  print_observation: false
+  print_control: false
   acc_fixed: false
-  log_interval: 1
-  enable_features: true
+  log_interval: 10
+  enable_features: false
   features_log_file: /tmp/neural_features.log

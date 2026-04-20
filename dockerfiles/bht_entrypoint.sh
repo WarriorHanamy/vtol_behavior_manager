@@ -5,10 +5,7 @@ set -e
 # Temporarily disable nounset around sourcing to avoid "unbound variable" errors.
 set +u
 source /opt/ros/humble/setup.bash
-
-if [ -f /home/ros/ros2_ws/install/setup.bash ]; then
-    source /home/ros/ros2_ws/install/setup.bash
-fi
+source /home/ros/ros2_ws/install/setup.bash
 set -u
 
 exec "$@"
