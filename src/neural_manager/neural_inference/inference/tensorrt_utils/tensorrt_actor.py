@@ -11,6 +11,8 @@ Reference:
     https://nvidia.github.io/cuda-python/cuda-bindings/latest
 """
 
+from __future__ import annotations
+
 import time
 from pathlib import Path
 from typing import Any
@@ -32,7 +34,7 @@ try:
 except ImportError:
   CUDA_AVAILABLE = False
 
-from inference.actors import BasePolicyActor
+from ..actors import BasePolicyActor
 
 
 class _CudaStream:

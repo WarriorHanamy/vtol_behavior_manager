@@ -29,10 +29,10 @@ class RevisionContext:
 
   revision_path: Path
   model_path: Path
-  engine_path: Path | None = None
   metadata_path: Path
   feature_specs: list[FeatureSpec]
   obs_dim: int
+  engine_path: Path | None = None
   action_dim: int = 4
 
   @classmethod

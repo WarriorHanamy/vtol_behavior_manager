@@ -78,8 +78,12 @@ class ActionPostProcessor:
         Vector3Stamped, "/neural/angular_rate_command_frd", 10
       )
       if self._logger:
-         self._logger.info("📡 Action post-processor topic: /neural/angular_rate_command_flu (body_flu)")
-        self._logger.info("📡 Action post-processor topic: /neural/angular_rate_command_frd (body_frd)")
+        self._logger.info(
+          "📡 Action post-processor topic: /neural/angular_rate_command_flu (body_flu)"
+        )
+        self._logger.info(
+          "📡 Action post-processor topic: /neural/angular_rate_command_frd (body_frd)"
+        )
 
     if action_limits is None:
       action_limits = {"min": -1.0, "max": 1.0}
@@ -404,4 +408,4 @@ class ActionPostProcessor:
     self._last_action = np.zeros(4, dtype=np.float32)
     self._last_thrust_acc = 0.0
     self._last_frd_ang_vel = np.zeros(3, dtype=np.float32)
-    self._control_command_count = 0 
+    self._control_command_count = 0

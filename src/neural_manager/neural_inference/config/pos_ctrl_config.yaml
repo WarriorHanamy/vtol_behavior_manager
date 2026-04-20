@@ -10,7 +10,7 @@ model:
   task: "vtol_hover"
   inference:
     backend: "onnx"
-    providers: ["CPUExecutionProvider"]
+    providers: ["CUDAxecutionProvider"]
     engine_path: ""
 
 control:

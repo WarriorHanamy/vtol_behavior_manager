@@ -23,7 +23,7 @@ Reference:
 import hashlib
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 try:
   import tensorrt as trt
@@ -135,7 +135,7 @@ def build_tensorrt_engine(
   onnx_path: Path,
   engine_path: Path,
   config: BuilderConfig | None = None,
-  log_func: callable | None = None,
+  log_func: Callable[[str], None] | None = None,
 ) -> bool:
   """Build a TensorRT engine from an ONNX model.
 
@@ -281,7 +281,7 @@ def build_tensorrt_engine_with_fallback(
   onnx_path: Path,
   engine_path: Path,
   config: BuilderConfig | None = None,
-  log_func: callable | None = None,
+  log_func: Callable[[str], None] | None = None,
 ) -> bool:
   """Build TensorRT engine with automatic fallback to FP16 if FP8 fails.
 
@@ -352,7 +352,7 @@ def engine_exists_and_valid(
   engine_path: Path,
   onnx_path: Path,
   check_hash: bool = True,
-  log_func: callable | None = None,
+  log_func: Callable[[str], None] | None = None,
 ) -> bool:
   """Check if TensorRT engine exists and matches the ONNX model.
 
@@ -441,7 +441,7 @@ def build_or_load_engine(
   engine_path: Path,
   config: BuilderConfig | None = None,
   force_rebuild: bool = False,
-  log_func: callable | None = None,
+  log_func: Callable[[str], None] | None = None,
 ) -> bool:
   """Build TensorRT engine if it doesn't exist or is outdated.
 
@@ -477,7 +477,7 @@ def build_or_load_engine(
 # =============================================================================
 
 
-def _log(log_func: callable | None, msg: str):
+def _log(log_func: Callable[[str], None] | None, msg: str):
   """Helper function for logging."""
   if log_func:
     log_func(msg)
@@ -485,7 +485,9 @@ def _log(log_func: callable | None, msg: str):
     print(f"[INFO] {msg}")
 
 
-def get_engine_info(engine_path: Path, log_func: callable | None = None) -> dict[str, Any] | None:
+def get_engine_info(
+  engine_path: Path, log_func: Callable[[str], None] | None = None
+) -> dict[str, Any] | None:
   """Get information about a TensorRT engine.
 
   Args:
@@ -547,7 +549,7 @@ def get_engine_info(engine_path: Path, log_func: callable | None = None) -> dict
     return None
 
 
-def list_available_devices(log_func: callable | None = None) -> list[str]:
+def list_available_devices(log_func: Callable[[str], None] | None = None) -> list[str]:
   """List available CUDA devices for TensorRT.
 
   Args:

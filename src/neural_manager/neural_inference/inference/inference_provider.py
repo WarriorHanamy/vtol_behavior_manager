@@ -196,7 +196,7 @@ class ONNXProvider(InferenceProvider):
 
     # Import actors module
     try:
-      from inference.actors import GRUPolicyActor, MLPPolicyActor
+      from .actors import GRUPolicyActor, MLPPolicyActor
 
       self._gru_actor_class = GRUPolicyActor
       self._mlp_actor_class = MLPPolicyActor
@@ -304,7 +304,7 @@ class TensorRTProvider(InferenceProvider):
 
     # Try to import TensorRT actor
     try:
-      from inference.tensorrt_utils.tensorrt_actor import (
+      from .tensorrt_utils.tensorrt_actor import (
         TensorRTGRUActor,
         TensorRTMLPActor,
       )
