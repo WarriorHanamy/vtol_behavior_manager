@@ -16,8 +16,8 @@
 using namespace std::chrono_literals;
 
 class NeuralExecutor : public px4_ros2::ModeExecutorBase {
-   static constexpr uint16_t RC_TAKEOFF_BUTTON_MASK = 512;
-   static constexpr uint16_t RC_TRIGGER_NEURAL_CONTROL_BUTTON = 1024;
+   static constexpr uint16_t RC_TRIGGER_NEURAL_CONTROL_BUTTON_MASK = 1024;
+   static constexpr float RC_TRIGGER_NEURAL_CONTROL_RISING_EDGE_AUX1_THRESHOLD = 0.5F;
   static constexpr uint8_t POSCTL_NAV_STATE =
       px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL;
   static constexpr double NEURAL_CONTROL_TIMEOUT_S = 0.5;
@@ -91,8 +91,8 @@ private:
   std::unique_ptr<px4_ros2::ManualControlInput> _manual_control_input;
 
   rclcpp::TimerBase::SharedPtr _flow_drive_timer;
-  bool _takeoff_button_pressed_last{false};
-  bool _button_1024_pressed_last{false};
+  bool _aux1_trigger_active_last{false};
+  bool _neural_control_button_pressed_last{false};
 
   rclcpp::Subscription<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr
       _neural_control_sub;
@@ -142,33 +142,6 @@ private:
   }
 
 
-   void startTakeoff() {
-     RCLCPP_INFO(node().get_logger(), "Starting takeoff from Position mode");
-     _mavlink_logger->info("[Neural Executor] Taking off");
-     stopTargetPublishing();
-
-     takeoff([this](px4_ros2::Result result) {
-       if (result == px4_ros2::Result::Deactivated) {
-         RCLCPP_WARN(node().get_logger(), "Takeoff deactivated");
-         _mavlink_logger->warning("[Neural Executor] Takeoff deactivated");
-         return;
-       }
-
-       if (result == px4_ros2::Result::Success) {
-         RCLCPP_INFO(node().get_logger(),
-                     "Takeoff completed, returning to Position");
-         _mavlink_logger->info("[Neural Executor] Takeoff completed");
-       } else {
-         RCLCPP_ERROR(node().get_logger(),
-                      "Takeoff failed: %s, returning to Position",
-                      resultToString(result));
-         _mavlink_logger->error("[Neural Executor] Takeoff failed");
-       }
-
-       enterPositionMode();
-     });
-   }
-
    void startNeuralCtrl() {
     RCLCPP_INFO(node().get_logger(), "Starting NeuralCtrl from Position mode");
     _mavlink_logger->info("[Neural Executor] Entering NeuralCtrl mode");
@@ -202,44 +175,27 @@ private:
     if (!_manual_control_input->isValid())
       return;
 
-    processTakeoffFlowStep();
     processNeuralTriggerFlowStep();
   }
 
-  void processTakeoffFlowStep() {
-    bool takeoff_button_pressed =
-        _manual_control_input->buttons() == RC_TAKEOFF_BUTTON_MASK;
-    bool takeoff_button_rising =
-        takeoff_button_pressed && !_takeoff_button_pressed_last;
-
-    if (takeoff_button_rising) {
-      if (_vehicle_status->navState() == POSCTL_NAV_STATE) {
-        RCLCPP_INFO(node().get_logger(), "Takeoff triggered via button=512");
-        _mavlink_logger->info("[Neural Executor] Takeoff triggered");
-        startTakeoff();
-      } else {
-        RCLCPP_WARN(node().get_logger(),
-                    "Takeoff ignored: not in Position mode (nav_state=%d)",
-                    _vehicle_status->navState());
-        _mavlink_logger->warning("[Neural Executor] Takeoff ignored: not in Position mode");
-      }
-    }
-    _takeoff_button_pressed_last = takeoff_button_pressed;
-  }
-
   void processNeuralTriggerFlowStep() {
-    // RC button 1024: trigger neural control (rising edge)
-    bool button_1024_pressed =
-        _manual_control_input->buttons() == RC_TRIGGER_NEURAL_CONTROL_BUTTON;
+    bool aux1_trigger_active =
+        _manual_control_input->aux1() >
+        RC_TRIGGER_NEURAL_CONTROL_RISING_EDGE_AUX1_THRESHOLD;
+    bool neural_control_button_pressed =
+        _manual_control_input->buttons() ==
+        RC_TRIGGER_NEURAL_CONTROL_BUTTON_MASK;
 
     if (_vehicle_status->navState() != POSCTL_NAV_STATE) {
       return;
     }
 
-    bool button_1024_rising =
-        button_1024_pressed && !_button_1024_pressed_last;
+    bool aux1_trigger_rising =
+        aux1_trigger_active && !_aux1_trigger_active_last;
+    bool neural_control_button_rising =
+        neural_control_button_pressed && !_neural_control_button_pressed_last;
 
-    if (button_1024_rising) {
+    if (aux1_trigger_rising || neural_control_button_rising) {
       if (!isNeuralControlAvailable()) {
         RCLCPP_WARN(node().get_logger(),
                     "Neural control not available, trigger ignored");
@@ -249,7 +205,8 @@ private:
       }
     }
 
-    _button_1024_pressed_last = button_1024_pressed;
+    _aux1_trigger_active_last = aux1_trigger_active;
+    _neural_control_button_pressed_last = neural_control_button_pressed;
   }
 
   void publishCurrentPositionAsTarget() {
