@@ -76,6 +76,8 @@ class VtolFeatureProvider(FeatureProviderBase):
     self._node: InferenceNodeProtocol | None = node
     self._odom_sub = None
     self._target_sub = None
+    self._has_received_target: bool = False
+    self._warned_waiting_for_target: bool = False
 
     super().__init__(metadata_path)
 
@@ -111,6 +113,12 @@ class VtolFeatureProvider(FeatureProviderBase):
     )
     self.update_vehicle_odom(ned_position, ned_velocity, ned_quat_frd, frd_ang_vel)
 
+    if not self._has_received_target:
+      if self._node is not None and not self._warned_waiting_for_target:
+        self._node.get_logger().warn("Waiting for /neural/target before running inference...")
+        self._warned_waiting_for_target = True
+      return
+
     if self._node is not None:
       self._node.run_inference()
 
@@ -123,6 +131,7 @@ class VtolFeatureProvider(FeatureProviderBase):
     """
     if not any(math.isnan(x) for x in msg.position):
       self._ned_target_position = np.array(msg.position, dtype=np.float32)
+      self._has_received_target = True
 
   def update_vehicle_odom(
     self,

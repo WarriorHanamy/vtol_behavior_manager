@@ -33,6 +33,10 @@ class InferenceNodeProtocol(Protocol):
     """Create a ROS2 subscription."""
     ...
 
+  def get_logger(self) -> Any:
+    """Get ROS2 node logger."""
+    ...
+
   def run_inference(self) -> None:
     """Run neural inference and publish control command.
 

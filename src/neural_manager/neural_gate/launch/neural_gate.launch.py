@@ -20,7 +20,6 @@ def generate_launch_description():
 
   common_params = {
     "use_sim_time": False,
-    "trigger_source": "aux1",
     "button_mask": 1024,
     "aux1_on_threshold": 0.6,
     "aux1_off_threshold": 0.4,
