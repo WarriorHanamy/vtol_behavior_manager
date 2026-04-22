@@ -9,22 +9,17 @@ LABEL maintainer="WarriorHanamy <rongerch@outlook.com>"
 WORKDIR /home/px4
 ARG PX4_GIT_URL=https://github.com/WarriorHanamy/PX4-Neupilot.git
 ARG PX4_GIT_REF=main
-ARG PX4_GIT_COMMIT
-ARG PX4_GIT_TAG=0.0.0-local
 RUN useradd -M -d /home/px4 -s /bin/bash px4 \
-    && install -d -o px4 -g px4 /home/px4 /home/px4/.cache /home/px4/.cache/ccache \
-    && echo "px4 ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/px4 \
-    && chmod 0440 /etc/sudoers.d/px4
-RUN git clone --depth 1 "${PX4_GIT_URL}" /home/px4/PX4-Neupilot --recursive
+  && install -d -o px4 -g px4 /home/px4 /home/px4/.cache /home/px4/.cache/ccache \
+  && echo "px4 ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/px4 \
+  && chmod 0440 /etc/sudoers.d/px4
+RUN git clone --depth 1 --branch "${PX4_GIT_REF}" "${PX4_GIT_URL}" /home/px4/PX4-Neupilot --recursive
 
 WORKDIR /home/px4/PX4-Neupilot
 RUN bash install-dds-agent.bash
 
-RUN git -C /home/px4/PX4-Neupilot fetch --depth 1 origin "${PX4_GIT_COMMIT}" \
-    && git -C /home/px4/PX4-Neupilot checkout --detach "${PX4_GIT_COMMIT}" \
-    && git -C /home/px4/PX4-Neupilot tag -f "${PX4_GIT_TAG}"
 RUN git -C /home/px4/PX4-Neupilot submodule sync --recursive \
-    && git -C /home/px4/PX4-Neupilot submodule update --init --recursive --jobs=8
+  && git -C /home/px4/PX4-Neupilot submodule update --init --recursive --jobs=8
 
 RUN chown -R px4:px4 /home/px4/PX4-Neupilot
 
