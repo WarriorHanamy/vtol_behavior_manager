@@ -169,3 +169,6 @@ Pipfile.lock
 
 # OpenCode planning
 .opencode/
+
+# dependencies (not tracked)
+deps/

@@ -5,7 +5,4 @@
 	path = src/px4-ros2-interface-lib
 	url = https://github.com/WarriorHanamy/px4-ros2-interface.git
 	branch = main
-[submodule "deps/PX4-Neupilot"]
-	path = deps/PX4-Neupilot
-	url = https://github.com/WarriorHanamy/PX4-Neupilot.git
-	branch = main
+
