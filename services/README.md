@@ -30,20 +30,19 @@ This document describes the systemd-based service architecture for managing the 
    ┌────┴────┐                      │
    ▼         ▼                      ▼
 ┌─────┐  ┌─────┐               ┌─────────┐
-│exec.│  │infer│               │test_exec│
+│gate │  │infer│               │test_exec│
 └─────┘  └─────┘               └─────────┘
 ```
 
 ## Service Groups
 
 ### Group A: Neural Services (Default)
-- `neural_executor.service` - Neural executor node
+- `neural_gate.service` - Neural gate node (forwards control when triggered)
 - `neural_infer.service` - Neural inference node
 - Started automatically when sim-session starts
 
-### Group B: Test Executor
-- `test_executor.service` - Test executor with joystick
-- Requires joystick/RC to be connected
+### Group B: Test Tools
+- Reserved for test utilities
 - Mutually exclusive with Group A
 
 ## Quick Start
@@ -95,15 +94,11 @@ systemctl --user isolate test.target
 ### Individual Services
 ```bash
 # Check neural services status
-systemctl --user status neural_executor.service
+systemctl --user status neural_gate.service
 systemctl --user status neural_infer.service
 
-# Check test executor status
-systemctl --user status test_executor.service
-
 # View specific logs
-journalctl --user -u neural_executor.service -f
-journalctl --user -u test_executor.service -f
+journalctl --user -u neural_gate.service -f
 ```
 
 ## Lifecycle Binding
@@ -186,8 +181,7 @@ systemctl --user status test.target
 | `services/sim-session.service` | Main simulation session service |
 | `services/neural.target` | Group A target (neural services) |
 | `services/test.target` | Group B target (test executor) |
-| `services/neural_executor.service` | Neural executor service |
+| `services/neural_gate.service` | Neural gate service |
 | `services/neural_infer.service` | Neural inference service |
-| `services/test_executor.service` | Test executor service |
 | `install-neural-services.sh` | Installation script |
 | `Makefile` | Make targets for control |

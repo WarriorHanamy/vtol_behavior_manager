@@ -124,7 +124,7 @@ docker-offload-ros2BuildTask:
 	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
 		"source /opt/ros/humble/setup.bash && \
 		 source /home/ros/ros2_ws/install/setup.bash && \
-		 colcon build --packages-select neural_executor 2>&1" | tee build/compile.log
+		 colcon build --packages-select neural_gate 2>&1" | tee build/compile.log
 	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
 	@echo ">>> Build log: build/compile.log"
 

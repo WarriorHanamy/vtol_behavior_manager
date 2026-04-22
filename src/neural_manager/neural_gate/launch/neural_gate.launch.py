@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 
-"""Neural Executor Launch File
+"""Neural Gate Launch File
 
-This launch file starts the Neural Executor system with:
-- Neural Executor Node with integrated RC triggering
-- Configuration for waypoint-based trajectory control
-- Comprehensive failsafe mechanisms
+Starts the Neural Gate node with configurable parameters.
 """
 
-
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -17,23 +12,26 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-  pkg_dir = get_package_share_directory("neural_executor")
-
   target_offset_arg = DeclareLaunchArgument(
     "target_offset",
     default_value="[0.0, 0.0, 0.0]",
-    description="Target position offset as [x, y, z] in meters (body frame, z negative=up)",
+    description="Target position offset as [x, y, z] in meters",
   )
 
   common_params = {
     "use_sim_time": False,
+    "trigger_source": "aux1",
+    "button_mask": 1024,
+    "aux1_on_threshold": 0.6,
+    "aux1_off_threshold": 0.4,
+    "neural_control_timeout_s": 0.5,
     "target_offset": LaunchConfiguration("target_offset"),
   }
 
-  executor_node = Node(
-    package="neural_executor",
-    executable="neural_executor_node",
-    name="neural_executor_node",
+  gate_node = Node(
+    package="neural_gate",
+    executable="neural_gate_node",
+    name="neural_gate_node",
     output="screen",
     parameters=[common_params],
     emulate_tty=True,
@@ -48,4 +46,4 @@ def generate_launch_description():
     ],
   )
 
-  return LaunchDescription([target_offset_arg, executor_node])
+  return LaunchDescription([target_offset_arg, gate_node])

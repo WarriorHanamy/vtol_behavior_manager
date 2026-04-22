@@ -1,5 +1,5 @@
 [Unit]
-Description=Neural Executor Service (runs inside bht container)
+Description=Neural Gate Service (runs inside bht container)
 
 PartOf=sim-session.service
 Before=neural.target
@@ -11,12 +11,12 @@ ExecStartPre=/bin/sh -c 'if ! docker ps --filter "name=bht" --format "{{.Names}}
   echo "Error: bht container not found. Start sim-session first." >&2; \
   exit 1; \
 fi'
-# Execute neural_executor launch file inside the bht container
+# Execute neural_gate launch file inside the bht container
 ExecStart=/bin/sh -c 'CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 docker exec -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && \
 cd /home/ros/ros2_ws && \
 source install/setup.bash && \
-ros2 launch neural_executor neural_executor.launch.py"'
+ros2 launch neural_gate neural_gate.launch.py"'
 Restart=no
 
 # Security settings for user service

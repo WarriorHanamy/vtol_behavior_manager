@@ -36,7 +36,7 @@ make sim              # Start simulation (ros2 + px4-gazebo + qgc)
 make sim-kill         # Stop simulation
 make sim-attach       # Attach to tmux session
 make sim-status       # Check simulation status
-make docker-offload-ros2BuildTask  # Build neural_executor in container
+make docker-offload-ros2BuildTask  # Build neural_gate in container
 make neural-infer      # Run inference in simulation
 ```
 

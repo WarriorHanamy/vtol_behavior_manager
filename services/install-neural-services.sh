@@ -2,7 +2,7 @@
 #
 # install-neural-services.sh
 #
-# Install neural_executor and neural_infer systemd user services
+# Install neural_gate and neural_infer systemd user services
 # This script links repo-managed unit files into ~/.config/systemd/user
 #
 
@@ -71,9 +71,8 @@ SERVICES=(
     "sim-session.service"
     "neural.target"
     "test.target"
-    "neural_executor.service"
+    "neural_gate.service"
     "neural_infer.service"
-    "test_executor.service"
 )
 FAILED=()
 
@@ -105,8 +104,8 @@ if [ ${#FAILED[@]} -eq 0 ]; then
     echo ""
     echo "Architecture:"
     echo "  sim-session.service  (main service, controls docker compose)"
-    echo "  ├── neural.target    (Group A: neural_executor only)"
-    echo "  └── test.target      (Group B: test_executor with joystick)"
+    echo "  ├── neural.target    (Group A: neural_gate + neural_infer)"
+    echo "  └── test.target      (Group B: test tools)"
     echo ""
     echo "Quick Start:"
     echo "  systemctl --user start sim-session.service    # Start sim + Group A (default)"

@@ -2,7 +2,7 @@
 Description=Neural Inference Service (runs inside bht container)
 
 BindsTo=bht-liveness.service
-After=bht-liveness.service neural_executor.service
+After=bht-liveness.service neural_gate.service
 PartOf=sim-session.service
 Before=neural.target
 

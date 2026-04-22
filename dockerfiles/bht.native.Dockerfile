@@ -87,7 +87,6 @@ WORKDIR ${WS_DIR}/src
 
 # Copy source code
 COPY --chown=ros:ros src/px4_msgs ./px4_msgs
-COPY --chown=ros:ros src/px4-ros2-interface-lib ./px4-ros2-interface-lib
 COPY --chown=ros:ros src/neural_manager ./neural_manager
 # Fix px4_msgs versioned messages
 RUN cp -r px4_msgs/msg/versioned/* px4_msgs/msg/ || true
@@ -98,13 +97,13 @@ WORKDIR ${WS_DIR}
 # Compile ROS packages natively
 RUN source /opt/ros/humble/setup.bash && \
   colcon build \
-  --packages-select px4_msgs px4_ros2_cpp\
+  --packages-select px4_msgs \
   --parallel-workers 4
 
 # Compile ROS packages natively
 RUN source /opt/ros/humble/setup.bash && \
   colcon build \
-  --packages-select neural_executor \
+  --packages-select neural_gate \
   --parallel-workers 4 \
   --symlink-install && \
   test -f install/setup.bash || (echo "ERROR: install/setup.bash not found" && ls -la && exit 1)
@@ -122,7 +121,7 @@ COPY --chmod=755 dockerfiles/bht_entrypoint.sh /entrypoint.sh
 
 # Set PYTHONPATH for module-style execution
 # Includes both installed packages and workspace source directories
-ENV PYTHONPATH=${WS_DIR}/install/lib/python3.10/site-packages:${WS_DIR}/src:${WS_DIR}/src/neural_executor:${PYTHONPATH}
+ENV PYTHONPATH=${WS_DIR}/install/lib/python3.10/site-packages:${WS_DIR}/src:${PYTHONPATH}
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["tail", "-f", "/dev/null"]
