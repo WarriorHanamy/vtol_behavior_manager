@@ -49,6 +49,8 @@ class NeuralControlNode(rclpy.node.Node):
       node=self,
       odometry_topic=self.cfg.node.odometry_topic,
       target_topic=self.cfg.node.target_topic,
+      odom_rate=self.cfg.control.odom_rate,
+      inference_rate=self.cfg.control.inference_hz,
     )
 
     self._policy_actor = self._create_policy_actor()

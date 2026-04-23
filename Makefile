@@ -205,7 +205,7 @@ neural-infer: sync-policies
 	docker cp src/. "$$CONTAINER":/home/ros/ros2_ws/src/; \
 	SESSION="vtol-neural"; \
 	tmux has-session -t $$SESSION 2>/dev/null && tmux kill-session -t $$SESSION; \
-	tmux new-session -d -s $$SESSION; \
+	tmux new-session -d -s $$SESSION; "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && exec bash'"; \
 	tmux new-window -t $$SESSION -n gate "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_gate neural_gate.launch.py'"; \
 	tmux new-window -t $$SESSION -n infer "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer'"; \
 	echo ">>> Tmux session '$$SESSION' created with 2 windows:"; \

@@ -56,6 +56,8 @@ class VtolFeatureProvider(FeatureProviderBase):
     node: InferenceNodeProtocol | None = None,
     odometry_topic: str | None = None,
     target_topic: str | None = None,
+    odom_rate: float = 100.0,
+    inference_rate: float = 50.0,
   ):
     """Initialize the VTOL feature provider.
 
@@ -78,6 +80,9 @@ class VtolFeatureProvider(FeatureProviderBase):
     self._target_sub = None
     self._has_received_target: bool = False
     self._warned_waiting_for_target: bool = False
+
+    self._odom_count: int = 0
+    self._inference_interval: int = max(1, round(odom_rate / inference_rate))
 
     super().__init__(metadata_path)
 
@@ -119,8 +124,11 @@ class VtolFeatureProvider(FeatureProviderBase):
         self._warned_waiting_for_target = True
       return
 
-    if self._node is not None:
-      self._node.run_inference()
+    self._odom_count += 1
+    if self._odom_count >= self._inference_interval:
+      self._odom_count = 0
+      if self._node is not None:
+        self._node.run_inference()
 
   def _on_target(self, msg: TrajectorySetpoint) -> None:
     """Handle target setpoint message.

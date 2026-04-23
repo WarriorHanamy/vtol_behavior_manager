@@ -19,6 +19,8 @@ control:
   min_thrust_g: 0.0
   max_thrust_g: 2.0
   max_ang_vel: [3.0, 3.0, 1.0]
+  inference_hz: 50.0
+  odom_rate: 100.0
   action_processing:
     use_tanh_activation: false
     enable_action_clipping: true
