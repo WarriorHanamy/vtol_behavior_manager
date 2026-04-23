@@ -4,28 +4,28 @@
 //
 // Neural Gate Node
 //
-// A single-file ROS2 node with three responsibilities:
-// 1. Publish /neural/target continuously (current position + offset).
-// 2. Listen to RC trigger (button and aux1 simultaneously).
-// 3. Publish OffboardControlMode to PX4 when the trigger is active and
-//    neural control messages are fresh, and forward /neural/control
-//    asynchronously to PX4 only while the gate is open.
+// A single-file ROS2 node with two responsibilities:
+// 1. Publish /neural/target when in POSCTL mode (current position + offset).
+// 2. Listen to RC trigger (button and aux1) to switch to offboard mode.
+//
+// State machine based on VehicleStatus nav_state:
+//   - POSCTL: publish target, allow trigger to switch to offboard
+//   - OFFBOARD: do nothing, neural network is in control
+//   - default: WARN, do nothing
 //
 // Parameters:
 //   button_mask (int): bitmask for button trigger (default 1024)
-//   aux1_on_threshold (double): aux1 value above which gate opens (default 0.6)
-//   aux1_off_threshold (double): aux1 value below which gate closes (default
-//   0.4) neural_control_timeout_s (double): max age of /neural/control to be
-//   valid target_offset (vector<double>): [x, y, z] offset added to current
-//   position
+//   aux1_on_threshold (double): aux1 value above which trigger activates (default 0.6)
+//   aux1_off_threshold (double): aux1 value below which trigger deactivates (default 0.4)
+//   target_offset (vector<double>): [x, y, z] offset added to current position
 
 #include <rclcpp/rclcpp.hpp>
 
 #include <px4_msgs/msg/manual_control_setpoint.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
-#include <px4_msgs/msg/vehicle_acc_rates_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
+#include <px4_msgs/msg/vehicle_command_ack.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
 
@@ -40,7 +40,6 @@ public:
     this->declare_parameter<int>("button_mask", 1024);
     this->declare_parameter<double>("aux1_on_threshold", 0.6);
     this->declare_parameter<double>("aux1_off_threshold", 0.4);
-    this->declare_parameter<double>("neural_control_timeout_s", 0.5);
     this->declare_parameter<std::vector<double>>("target_offset",
                                                  {0.0, 0.0, 0.0});
 
@@ -48,8 +47,6 @@ public:
         static_cast<uint16_t>(this->get_parameter("button_mask").as_int());
     aux1_on_threshold_ = this->get_parameter("aux1_on_threshold").as_double();
     aux1_off_threshold_ = this->get_parameter("aux1_off_threshold").as_double();
-    neural_control_timeout_s_ =
-        this->get_parameter("neural_control_timeout_s").as_double();
 
     std::vector<double> offset_param =
         this->get_parameter("target_offset").as_double_array();
@@ -67,9 +64,6 @@ public:
     offboard_mode_pub_ =
         this->create_publisher<px4_msgs::msg::OffboardControlMode>(
             "/fmu/in/offboard_control_mode", 1);
-    control_pub_ =
-        this->create_publisher<px4_msgs::msg::VehicleAccRatesSetpoint>(
-            "/fmu/in/vehicle_acc_rates_setpoint", 1);
     vehicle_cmd_pub_ = this->create_publisher<px4_msgs::msg::VehicleCommand>(
         "/fmu/in/vehicle_command", 1);
 
@@ -93,53 +87,46 @@ public:
 
     vehicle_status_sub_ =
         this->create_subscription<px4_msgs::msg::VehicleStatus>(
-            "/fmu/out/vehicle_status", rclcpp::SensorDataQoS(),
+            "/fmu/out/vehicle_status_v1", rclcpp::SensorDataQoS(),
             [this](const px4_msgs::msg::VehicleStatus::SharedPtr msg) {
               px4_nav_state_ = msg->nav_state;
               has_vehicle_status_ = true;
             });
 
-    neural_control_sub_ =
-        this->create_subscription<px4_msgs::msg::VehicleAccRatesSetpoint>(
-            "/neural/control", 10,
-            [this](
-                const px4_msgs::msg::VehicleAccRatesSetpoint::SharedPtr msg) {
-              last_neural_control_msg_ = *msg;
-              has_neural_control_ = true;
-              last_neural_control_time_ns_ = nowNanoseconds();
-              if (gate_open_) {
-                control_pub_->publish(*msg);
+    vehicle_command_ack_sub_ =
+        this->create_subscription<px4_msgs::msg::VehicleCommandAck>(
+            "/fmu/out/vehicle_command_ack", rclcpp::SensorDataQoS(),
+            [this](const px4_msgs::msg::VehicleCommandAck::SharedPtr msg) {
+              if (msg->command ==
+                  px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE) {
+                if (msg->result ==
+                    px4_msgs::msg::VehicleCommandAck::VEHICLE_CMD_RESULT_ACCEPTED) {
+                  RCLCPP_INFO(this->get_logger(),
+                              "[GATE] Offboard mode confirmed via ACK");
+                } else {
+                  RCLCPP_WARN(this->get_logger(),
+                              "[GATE] Offboard mode command rejected: %d",
+                              msg->result);
+                }
               }
             });
 
-    // 50 Hz timer
-    timer_ = this->create_wall_timer(std::chrono::milliseconds(20),
+    // 400 Hz timer (2.5ms)
+    timer_ = this->create_wall_timer(std::chrono::microseconds(2500),
                                      [this]() { tick(); });
 
-    // 10 Hz timer for offboard control mode heartbeat
-    offboard_mode_timer_ =
-        this->create_wall_timer(std::chrono::milliseconds(100), [this]() {
-          if (offboard_requested_) {
-            publishOffboardControlMode();
-          }
-        });
+    // 10 Hz timer for offboard heartbeat (unconditional)
+    offboard_heartbeat_timer_ =
+        this->create_wall_timer(std::chrono::milliseconds(100),
+                                [this]() { publishOffboardHeartbeat(); });
 
-    RCLCPP_INFO(this->get_logger(), "NeuralGate node initialized");
-    RCLCPP_INFO(this->get_logger(), "  target_offset: [%.2f, %.2f, %.2f]",
+    RCLCPP_INFO(this->get_logger(), "[GATE] NeuralGate node initialized");
+    RCLCPP_INFO(this->get_logger(), "[GATE]   target_offset: [%.2f, %.2f, %.2f]",
                 target_offset_[0], target_offset_[1], target_offset_[2]);
   }
 
 private:
   int64_t nowNanoseconds() { return this->get_clock()->now().nanoseconds(); }
-
-  bool isNeuralControlFresh() {
-    if (!has_neural_control_)
-      return false;
-    double elapsed =
-        static_cast<double>(nowNanoseconds() - last_neural_control_time_ns_) /
-        1e9;
-    return elapsed < neural_control_timeout_s_;
-  }
 
   bool evaluateTrigger() {
     if (!rc_valid_) {
@@ -182,7 +169,7 @@ private:
     target_pub_->publish(msg);
   }
 
-  void publishOffboardControlMode() {
+  void publishOffboardHeartbeat() {
     px4_msgs::msg::OffboardControlMode msg;
     msg.timestamp =
         static_cast<uint64_t>(this->get_clock()->now().nanoseconds() / 1000);
@@ -211,58 +198,33 @@ private:
     vehicle_cmd_pub_->publish(msg);
   }
 
-  bool shouldSendOffboardModeCommand(int64_t now_ns, bool neural_fresh,
-                                     bool px4_in_offboard) {
-    bool command_needed =
-        offboard_requested_ && neural_fresh && !px4_in_offboard;
-    bool heartbeat_warmed_up =
-        static_cast<double>(now_ns - offboard_request_start_time_ns_) / 1e9 >=
-        1.0;
-    bool command_never_sent = last_offboard_mode_command_time_ns_ == 0;
-    bool retry_due =
-        command_never_sent ||
-        static_cast<double>(now_ns - last_offboard_mode_command_time_ns_) /
-                1e9 >=
-            0.5;
-
-    return command_needed && heartbeat_warmed_up && retry_due;
-  }
-
   void tick() {
-    int64_t now_ns = nowNanoseconds();
     bool trigger_edge = evaluateTrigger();
-    bool neural_fresh = isNeuralControlFresh();
-    bool px4_in_offboard =
-        has_vehicle_status_ &&
-        px4_nav_state_ ==
-            px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD;
 
-    if (!rc_valid_ || !neural_fresh) {
-      offboard_requested_ = false;
-    }
+    switch (px4_nav_state_) {
+      case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL:
+        if (position_valid_) {
+          RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                               "[GATE] POSCTL - publishing /neural/target");
+          publishTarget();
+        } else {
+          RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                               "[GATE] POSCTL - waiting for odometry");
+        }
+        if (trigger_edge) {
+          publishOffboardModeCommand();
+        }
+        break;
 
-    if (trigger_edge) {
-      offboard_requested_ = true;
-      offboard_request_start_time_ns_ = now_ns;
-      last_offboard_mode_command_time_ns_ = 0;
-    }
+      case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD:
+        // Neural network is in control, do nothing
+        break;
 
-    if (shouldSendOffboardModeCommand(now_ns, neural_fresh, px4_in_offboard)) {
-      publishOffboardModeCommand();
-      last_offboard_mode_command_time_ns_ = now_ns;
-    }
-
-    bool was_open = gate_open_;
-    gate_open_ = offboard_requested_ && neural_fresh && px4_in_offboard;
-
-    if (gate_open_ && !was_open) {
-      RCLCPP_INFO(this->get_logger(), "Gate OPENED");
-    } else if (!gate_open_ && was_open) {
-      RCLCPP_INFO(this->get_logger(), "Gate CLOSED");
-    }
-
-    if (!gate_open_ && position_valid_) {
-      publishTarget();
+      default:
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                             "[GATE] current mode is %d, not supported",
+                             px4_nav_state_);
+        break;
     }
   }
 
@@ -270,7 +232,6 @@ private:
   uint16_t button_mask_;
   double aux1_on_threshold_;
   double aux1_off_threshold_;
-  double neural_control_timeout_s_;
   std::array<double, 3> target_offset_;
 
   // State
@@ -281,33 +242,24 @@ private:
   float rc_aux1_ = 0.0f;
   uint16_t rc_buttons_ = 0;
 
-  bool gate_open_ = false;
-  bool offboard_requested_ = false;
   bool prev_button_active_ = false;
   bool prev_aux1_active_ = false;
-  bool has_neural_control_ = false;
   bool has_vehicle_status_ = false;
   uint8_t px4_nav_state_ = 0;
-  int64_t offboard_request_start_time_ns_ = 0;
-  int64_t last_offboard_mode_command_time_ns_ = 0;
-  int64_t last_neural_control_time_ns_ = 0;
-  px4_msgs::msg::VehicleAccRatesSetpoint last_neural_control_msg_;
 
   // ROS interfaces
   rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr target_pub_;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
       offboard_mode_pub_;
-  rclcpp::Publisher<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr
-      control_pub_;
   rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_cmd_pub_;
   rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<px4_msgs::msg::ManualControlSetpoint>::SharedPtr rc_sub_;
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr
       vehicle_status_sub_;
-  rclcpp::Subscription<px4_msgs::msg::VehicleAccRatesSetpoint>::SharedPtr
-      neural_control_sub_;
+  rclcpp::Subscription<px4_msgs::msg::VehicleCommandAck>::SharedPtr
+      vehicle_command_ack_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::TimerBase::SharedPtr offboard_mode_timer_;
+  rclcpp::TimerBase::SharedPtr offboard_heartbeat_timer_;
 };
 
 int main(int argc, char *argv[]) {

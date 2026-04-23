@@ -2,7 +2,7 @@
 
 node:
   name: "neural_pos_ctrl_node"
-  setpoint_topic: "/neural/control"
+  setpoint_topic: "/fmu/in/vehicle_acc_rates_setpoint"
   odometry_topic: "/fmu/out/vehicle_odometry"
   target_topic: "/neural/target"
 

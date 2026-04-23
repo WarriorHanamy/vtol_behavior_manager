@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-"""Neural Gate Launch File
+"""Neural Gate Mode Switch Launch File
 
-Starts the Neural Gate node with configurable parameters.
+Starts the neural_gate node which implements a mode-switch state machine
+based on PX4 VehicleStatus. Publishes /neural/target in POSCTL mode and
+sends offboard mode commands on RC trigger. Offboard heartbeat sent at 10Hz.
 """
 
 from launch import LaunchDescription
@@ -23,7 +25,6 @@ def generate_launch_description():
     "button_mask": 1024,
     "aux1_on_threshold": 0.6,
     "aux1_off_threshold": 0.4,
-    "neural_control_timeout_s": 0.5,
     "target_offset": LaunchConfiguration("target_offset"),
   }
 

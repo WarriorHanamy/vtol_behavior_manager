@@ -1,7 +1,0 @@
-[Unit]
-Description=Test Tools Group B
-Conflicts=neural.target
-AllowIsolate=yes
-
-[Install]
-WantedBy=sim-session.service

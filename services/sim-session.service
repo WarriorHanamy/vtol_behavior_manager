@@ -29,11 +29,7 @@ ExecStart=/bin/sh -eu -c '\
   echo "✓ Containers started:"; \
   docker compose ps --format "table {{.Name}}\t{{.Status}}"; \
   echo ""; \
-  echo "Starting neural executor..."; \
-  systemctl --user start neural.target; \
-  echo "✓ Neural executor started"; \
-  echo ""; \
-   echo "To enter bht container: docker compose attach bht"; \
+  echo "To enter bht container: docker compose attach bht"; \
   echo "To exit container (keep running): Ctrl+P Ctrl+Q"; \
   echo "========================================"'
 
@@ -50,8 +46,6 @@ ExecStop=/bin/sh -eu -c '\
   echo "========================================"; \
   echo "Stopping VTOL Simulation Session"; \
   echo "========================================"; \
-  echo "Stopping dependent services..."; \
-  systemctl --user stop neural.target test.target 2>/dev/null || true; \
   echo "Stopping containers..."; \
   docker compose down --remove-orphans; \
   echo "✓ Simulation stopped"; \

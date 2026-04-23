@@ -12,6 +12,8 @@
 #   make docker-offload-ros2BuildTask - Build in simulation container
 #   make docker-build-ros2-jetson - Build Jetson deployment image (single-stage)
 #   make docker-run-ros2-jetson   - Test deployment image locally
+#   make neural-infer           - Start neural nodes in tmux session
+#   make neural-attach          - Attach to tmux session
 #
 # Deployment (image transfer) is handled by the 'linker' repository.
 # =============================================================================
@@ -22,8 +24,6 @@
 
 VTOL_OFFLOAD_CONTAINER ?= vtol-build-offload
 VTOL_OFFLOAD_IMAGE ?= bht-vtol:latest
-PX4_SUBMODULE_PATH := deps/PX4-Neupilot
-GIT_SAFE_FLAGS := -c safe.directory=$(CURDIR) -c safe.directory=$(abspath $(PX4_SUBMODULE_PATH))
 
 # =============================================================================
 # Jetson variables (for deployment build and testing)
@@ -133,10 +133,10 @@ MSG_SUBMODULE_PATH := src/px4_msgs/msg
 
 sync-msg-submodule:
 	@echo ">>> Resolving msg submodule info..."; \
-	if [ -d "$(PX4_SUBMODULE_PATH)" ]; then \
-		MSG_COMMIT=$$(git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" submodule status -- msg | sed 's/^[-+ ]//' | cut -d' ' -f1); \
-		MSG_URL=$$(git $(GIT_SAFE_FLAGS) -C "$(PX4_SUBMODULE_PATH)" config -f .gitmodules submodule.msg.url); \
-		echo ">>> Using local PX4 submodule metadata from $(PX4_SUBMODULE_PATH)"; \
+	if [ -d "$(MSG_SUBMODULE_PATH)" ]; then \
+		MSG_COMMIT=$$(git -C "$(MSG_SUBMODULE_PATH)" submodule status -- msg | sed 's/^[-+ ]//' | cut -d' ' -f1); \
+		MSG_URL=$$(git -C "$(MSG_SUBMODULE_PATH)" config -f .gitmodules submodule.msg.url); \
+		echo ">>> Using local PX4 submodule metadata from $(MSG_SUBMODULE_PATH)"; \
 	else \
 		echo ">>> Local PX4 submodule not found, falling back to gh api..."; \
 		MSG_COMMIT=$$(gh api repos/WarriorHanamy/PX4-Neupilot/git/trees/main --jq '.tree[] | select(.path=="msg") | .sha'); \
@@ -198,6 +198,9 @@ neural-infer: sync-policies
 		echo "Error: bht container not running. Use 'make sim' first."; \
 		exit 1; \
 	fi; \
+	echo ">>> Killing legacy neural processes..."; \
+	docker exec "$$CONTAINER" bash -lc 'pkill -f neural_gate_node || true; pkill -f neural_gate.launch.py || true; pkill -f neural_infer || true'; \
+	sleep 1; \
 	echo ">>> Syncing src to container..."; \
 	docker cp src/. "$$CONTAINER":/home/ros/ros2_ws/src/; \
 	SESSION="vtol-neural"; \
@@ -224,9 +227,9 @@ neural-attach:
 .PHONY: ship-context
 
 ship-context:
-	@echo ">>> Copying build context to Jetson (excluding deps/)..."
+	@echo ">>> Copying build context to Jetson..."
 	@ssh $(SSH_OPTS) $(DEVICE_USER)@$(DEVICE_IP) "rm -rf $(ROS2_REMOTE_BUILD_DIR) && mkdir -p $(ROS2_REMOTE_BUILD_DIR)"
-	@rsync -avz --exclude='.git' --exclude='build' --exclude='.venv' --exclude='__pycache__' --exclude='deps/' \
+	@rsync -avz --exclude='.git' --exclude='build' --exclude='.venv' --exclude='__pycache__' \
 		-e "ssh $(SSH_OPTS)" . $(DEVICE_USER)@$(DEVICE_IP):$(ROS2_REMOTE_BUILD_DIR)/
 
 # =============================================================================

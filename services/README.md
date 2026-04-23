@@ -90,9 +90,7 @@ make sync-policies    # Copy policies to bht container
 - Stops all containers on `make sim-kill`
 
 ### neural.target & test.target
-- Legacy grouping targets (kept for compatibility)
-- **Not used** by the new tmux workflow
-- Can be ignored or removed in future
+- Removed. The tmux workflow does not require systemd grouping targets.
 
 ## Troubleshooting
 
@@ -118,8 +116,6 @@ tmux kill-session -t vtol-neural   # Force cleanup
 | File | Purpose |
 |------|---------|
 | `services/sim-session.service` | Main simulation session service |
-| `services/neural.target` | Legacy target (unused) |
-| `services/test.target` | Legacy target (unused) |
 | `install-neural-services.sh` | Installation script (sim-session only) |
 | `Makefile` | Make targets for control |
 
@@ -129,5 +125,5 @@ Previously, `neural_gate` and `neural_infer` ran as systemd user services.
 These have been **replaced by the tmux workflow** (`make neural-infer`).
 
 The `sim-session.service` remains unchanged for simulation management.
-All other systemd units (neural_gate.service, neural_infer.service) are
-no longer installed or used.
+Systemd units for neural services (neural_gate.service, neural_infer.service)
+are no longer installed or used. Use the tmux workflow instead.

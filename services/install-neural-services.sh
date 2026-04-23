@@ -2,7 +2,7 @@
 #
 # install-neural-services.sh
 #
-# Install neural_gate and neural_infer systemd user services
+# Install sim-session systemd user service
 # This script links repo-managed unit files into ~/.config/systemd/user
 #
 
@@ -66,11 +66,8 @@ echo "Target: ${USER_SYSTEMD_DIR}"
 echo ""
 
 # Install services
-# Order matters: sim-session first, targets are optional grouping units
 SERVICES=(
     "sim-session.service"
-    "neural.target"
-    "test.target"
 )
 FAILED=()
 
@@ -102,18 +99,12 @@ if [ ${#FAILED[@]} -eq 0 ]; then
     echo ""
 echo "Architecture:"
 echo "  sim-session.service  (main service, controls docker compose)"
-echo "  ├── neural.target    (optional grouping, not used by tmux workflow)"
-echo "  └── test.target      (optional grouping, not used by tmux workflow)"
 echo ""
 echo "Quick Start (simulation):"
 echo "  make sim                    # Start simulation (docker compose)"
-echo "  make neural-infer           # Start neural nodes in tmux session"
-echo "  make neural-attach          # Attach to tmux session"
-echo "  make neural-kill            # Stop neural nodes"
 echo ""
-echo "Legacy systemd services (neural_gate.service, neural_infer.service)"
-echo "have been replaced by tmux workflow. Use 'make install' only for"
-echo "sim-session.service management."
+echo "Neural services (neural_gate, neural_infer) run in tmux."
+echo "Use 'make install' only for sim-session.service management."
     exit 0
 else
     echo -e "${RED}=================================================="

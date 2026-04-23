@@ -1,7 +1,0 @@
-[Unit]
-Description=Neural Services Group (legacy systemd - replaced by tmux)
-Conflicts=test.target
-AllowIsolate=yes
-
-[Install]
-WantedBy=sim-session.service
