@@ -80,7 +80,6 @@ sim:
 	@for i in $$(seq 1 30); do \
 		if docker ps --filter "name=bht" --format "{{.Names}}" | grep -q .; then \
 			echo ">>> bht container ready"; \
-			echo ">>> Done. Use 'make sim-attach' to attach to tmux."; \
 			exit 0; \
 		fi; \
 		sleep 1; \
@@ -99,10 +98,6 @@ sim-kill:
 sim-status:
 	@systemctl --user status sim-session.service --no-pager
 
-.PHONY: sim-attach
-
-sim-attach:
-	@tmux attach -t vtol-sim 2>/dev/null || echo "Session not running. Use 'make sim' first."
 
 # =============================================================================
 # Build targets (simulation offload, amd64)
@@ -197,7 +192,7 @@ sync-policies:
 .PHONY: neural-infer
 
 neural-infer: sync-policies
-	@echo ">>> Running neural_infer in bht container..."
+	@echo ">>> Starting neural services in tmux session 'vtol-neural'..."
 	@CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 	if [ -z "$$CONTAINER" ]; then \
 		echo "Error: bht container not running. Use 'make sim' first."; \
@@ -205,7 +200,22 @@ neural-infer: sync-policies
 	fi; \
 	echo ">>> Syncing src to container..."; \
 	docker cp src/. "$$CONTAINER":/home/ros/ros2_ws/src/; \
-	docker exec -i -u ros "$$CONTAINER" /bin/bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer"
+	SESSION="vtol-neural"; \
+	tmux has-session -t $$SESSION 2>/dev/null && tmux kill-session -t $$SESSION; \
+	tmux new-session -d -s $$SESSION; \
+	tmux new-window -t $$SESSION -n gate "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_gate neural_gate.launch.py'"; \
+	tmux new-window -t $$SESSION -n infer "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer'"; \
+	echo ">>> Tmux session '$$SESSION' created with 2 windows:"; \
+	echo "    - gate:   Neural Gate launch"; \
+	echo "    - infer:  Neural Inference"; \
+	echo ">>> Attaching... (detach with Ctrl+b then d)"; \
+	sleep 1; \
+	exec tmux attach -t $$SESSION
+
+.PHONY: neural-attach
+
+neural-attach:
+	@tmux attach -t vtol-neural 2>/dev/null || echo "Session not running. Use 'make neural-infer' first."
 
 # =============================================================================
 # Shipping targets (copied from linker)

@@ -1,7 +1,6 @@
 [Unit]
-Description=Neural Services Group (neural_gate + neural_infer)
+Description=Neural Services Group (legacy systemd - replaced by tmux)
 Conflicts=test.target
-Wants=neural_gate.service
 AllowIsolate=yes
 
 [Install]

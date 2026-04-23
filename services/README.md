@@ -1,6 +1,6 @@
 # Simulation Session Service Architecture
 
-This document describes the systemd-based service architecture for managing the simulation-side VTOL session and neural services.
+This document describes the systemd-tmux hybrid architecture for managing the simulation-side VTOL session and neural services.
 
 ## Architecture Overview
 
@@ -9,169 +9,108 @@ This document describes the systemd-based service architecture for managing the 
 │                    Frontend                              │
 │              (WebSocket/HTTP API)                        │
 └─────────────────────┬───────────────────────────────────┘
-                      │ systemctl --user start/stop sim-session
-                      ▼
+                       │ systemctl --user start/stop
+                       ▼
 ┌─────────────────────────────────────────────────────────┐
 │              sim-session.service (Main Service)          │
 │  - tmux session: vtol-sim                                │
 │  - docker compose up (px4, qgc, bht)                    │
-│  - Auto-starts neural.target on success                  │
 │  - docker compose down on stop                           │
 └─────────────────────┬───────────────────────────────────┘
-                      │ PartOf=sim-session.service
-        ┌─────────────┴─────────────┐
-        │                           │
-        ▼                           ▼
-┌───────────────┐           ┌───────────────┐
-│ neural.target │           │  test.target  │
-│   (Group A)   │◄─Conflicts─►│   (Group B)  │
-└───────┬───────┘           └───────┬───────┘
-        │                           │
-   ┌────┴────┐                      │
-   ▼         ▼                      ▼
-┌─────┐  ┌─────┐               ┌─────────┐
-│gate │  │infer│               │test_exec│
-└─────┘  └─────┘               └─────────┘
+                       │
+                       │ make neural-infer
+                       ▼
+              ┌─────────────────────┐
+              │  tmux session:      │
+              │  vtol-neural        │
+              │  ┌───────────────┐  │
+              │  │ Window 0:     │  │
+              │  │ neural_gate   │◄─┘
+              │  └───────────────┘
+              │  ┌───────────────┐
+              │  │ Window 1:     │
+              │  │ neural_infer  │◄─ Python node
+              │  └───────────────┘
+              └─────────────────────┘
 ```
-
-## Service Groups
-
-### Group A: Neural Services (Default)
-- `neural_gate.service` - Neural gate node (forwards control when triggered)
-- `neural_infer.service` - Neural inference node
-- Started automatically when sim-session starts
-
-### Group B: Test Tools
-- Reserved for test utilities
-- Mutually exclusive with Group A
 
 ## Quick Start
 
 ```bash
-# 1. Install services (one-time)
+# 1. Install sim-session service (one-time)
 make install
 
 # 2. Start simulation
 make sim
 
-# 3. Switch between groups
-make neural    # Switch to Group A
-make test      # Switch to Group B
+# 3. Start neural nodes in tmux
+make neural-infer
 
-# 4. Check status
-make sim-status
+# 4. Attach to tmux session to view output
+make neural-attach
+#   - Switch windows: Ctrl+b then 0 or 1
+#   - Detach: Ctrl+b d
+#   - Quit: Exit in both windows or 'make neural-kill'
 
-# 5. Stop everything
+# 5. Stop neural nodes
+make neural-kill
+
+# 6. Stop simulation
 make sim-kill
 ```
 
-## Systemd Commands
+## Make Targets
 
-### Session Control
+### Simulation Control
 ```bash
-# Start sim session
-systemctl --user start sim-session.service
-
-# Stop sim session (stops all services)
-systemctl --user stop sim-session.service
-
-# Check status
-systemctl --user status sim-session.service
-
-# View logs
-journalctl --user -u sim-session.service -f
+make sim              # Start docker compose (px4, qgc, bht)
+make sim-kill         # Stop simulation
+make sim-status       # Check sim-session.service status
+make sim-attach       # Attach to simulation tmux (vtol-sim)
 ```
 
-### Group Switching
+### Neural Services (tmux-based)
 ```bash
-# Switch to Group A (neural)
-systemctl --user isolate neural.target
-
-# Switch to Group B (test)
-systemctl --user isolate test.target
+make neural-infer     # Start neural_gate + neural_infer in tmux
+make neural-attach    # Attach to vtol-neural tmux session
+make neural-kill      # Stop neural tmux session
 ```
 
-### Individual Services
+### Support
 ```bash
-# Check neural services status
-systemctl --user status neural_gate.service
-systemctl --user status neural_infer.service
-
-# View specific logs
-journalctl --user -u neural_gate.service -f
+make sync-policies    # Copy policies to bht container
 ```
 
-## Lifecycle Binding
+## Systemd Services
 
-When `sim-session.service` stops:
-1. tmux session is killed
-2. `docker compose down` is executed
-3. All neural/test services stop (PartOf relationship)
+### sim-session.service
+- Manages docker compose lifecycle for simulation
+- Creates tmux session `vtol-sim` for simulation tools
+- Starts automatically on `make sim`
+- Stops all containers on `make sim-kill`
 
-When switching groups:
-1. Current group services stop
-2. New group services start
-3. sim-session continues running
-
-## Frontend Integration
-
-The frontend can control the simulation via:
-
-```bash
-# Start sim
-systemctl --user start sim-session.service
-
-# Stop sim
-systemctl --user stop sim-session.service
-
-# Switch to neural group
-systemctl --user isolate neural.target
-
-# Switch to test group
-systemctl --user isolate test.target
-
-# Get status (JSON output available via systemctl --user show)
-systemctl --user show sim-session.service --property=ActiveState,SubState
-```
+### neural.target & test.target
+- Legacy grouping targets (kept for compatibility)
+- **Not used** by the new tmux workflow
+- Can be ignored or removed in future
 
 ## Troubleshooting
 
-### Service won't start
+### tmux session already exists
 ```bash
-# Check if services are installed
-ls -la ~/.config/systemd/user/
-
-# Reload systemd
-systemctl --user daemon-reload
-
-# Check logs
-journalctl --user -u sim-session.service -n 50
+make neural-kill      # Kill existing session
+make neural-infer     # Restart fresh
 ```
 
-`sim-session.service` resolves the repo root from the installed symlink in
-`~/.config/systemd/user/`. If you move this repository, rerun `make install`
-to refresh the symlink target.
-
-### tmux session not accessible
+### Container not running
 ```bash
-# List tmux sessions
-tmux ls
-
-# Attach to session
-tmux attach -t vtol-sim
-
-# Or use make target
-make sim-attach
+make sim              # Start simulation first
 ```
 
-### Group switch fails
+### Cannot attach to tmux
 ```bash
-# Check if sim-session is running first
-systemctl --user status sim-session.service
-
-# Check target status
-systemctl --user status neural.target
-systemctl --user status test.target
+tmux ls               # List sessions
+tmux kill-session -t vtol-neural   # Force cleanup
 ```
 
 ## Files
@@ -179,9 +118,16 @@ systemctl --user status test.target
 | File | Purpose |
 |------|---------|
 | `services/sim-session.service` | Main simulation session service |
-| `services/neural.target` | Group A target (neural services) |
-| `services/test.target` | Group B target (test executor) |
-| `services/neural_gate.service` | Neural gate service |
-| `services/neural_infer.service` | Neural inference service |
-| `install-neural-services.sh` | Installation script |
+| `services/neural.target` | Legacy target (unused) |
+| `services/test.target` | Legacy target (unused) |
+| `install-neural-services.sh` | Installation script (sim-session only) |
 | `Makefile` | Make targets for control |
+
+## Migration from Systemd
+
+Previously, `neural_gate` and `neural_infer` ran as systemd user services.
+These have been **replaced by the tmux workflow** (`make neural-infer`).
+
+The `sim-session.service` remains unchanged for simulation management.
+All other systemd units (neural_gate.service, neural_infer.service) are
+no longer installed or used.

@@ -66,13 +66,11 @@ echo "Target: ${USER_SYSTEMD_DIR}"
 echo ""
 
 # Install services
-# Order matters: targets before services, sim-session first
+# Order matters: sim-session first, targets are optional grouping units
 SERVICES=(
     "sim-session.service"
     "neural.target"
     "test.target"
-    "neural_gate.service"
-    "neural_infer.service"
 )
 FAILED=()
 
@@ -102,23 +100,20 @@ if [ ${#FAILED[@]} -eq 0 ]; then
     echo "All services installed successfully!"
     echo "==================================================${NC}"
     echo ""
-    echo "Architecture:"
-    echo "  sim-session.service  (main service, controls docker compose)"
-    echo "  ├── neural.target    (Group A: neural_gate + neural_infer)"
-    echo "  └── test.target      (Group B: test tools)"
-    echo ""
-    echo "Quick Start:"
-    echo "  systemctl --user start sim-session.service    # Start sim + Group A (default)"
-    echo "  systemctl --user stop sim-session.service     # Stop everything"
-    echo ""
-    echo "Switch Groups (mutually exclusive):"
-    echo "  systemctl --user isolate neural.target        # Switch to Group A"
-    echo "  systemctl --user isolate test.target          # Switch to Group B"
-    echo ""
-    echo "Check status:"
-    echo "  systemctl --user status sim-session.service"
-    echo "  systemctl --user status neural.target"
-    echo "  systemctl --user status test.target"
+echo "Architecture:"
+echo "  sim-session.service  (main service, controls docker compose)"
+echo "  ├── neural.target    (optional grouping, not used by tmux workflow)"
+echo "  └── test.target      (optional grouping, not used by tmux workflow)"
+echo ""
+echo "Quick Start (simulation):"
+echo "  make sim                    # Start simulation (docker compose)"
+echo "  make neural-infer           # Start neural nodes in tmux session"
+echo "  make neural-attach          # Attach to tmux session"
+echo "  make neural-kill            # Stop neural nodes"
+echo ""
+echo "Legacy systemd services (neural_gate.service, neural_infer.service)"
+echo "have been replaced by tmux workflow. Use 'make install' only for"
+echo "sim-session.service management."
     exit 0
 else
     echo -e "${RED}=================================================="
