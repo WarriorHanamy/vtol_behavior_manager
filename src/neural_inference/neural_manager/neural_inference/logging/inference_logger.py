@@ -61,6 +61,11 @@ class InferenceLogger:
     flu_ang_vel: np.ndarray,
     frd_ang_vel: np.ndarray,
     enu_to_target: np.ndarray | None = None,
+    task_label: str = "",
+    goal_str: str = "",
+    min_thrust_g: float = 0.0,
+    max_thrust_g: float = 2.0,
+    max_ang_vel: tuple[float, float, float] = (3.0, 5.0, 3.0),
   ) -> None:
     """Log output results after inference.
 
@@ -70,6 +75,10 @@ class InferenceLogger:
         flu_ang_vel: Processed angular rates in FLU frame [roll, pitch, yaw] rad/s
         frd_ang_vel: Processed angular rates in FRD frame [roll, pitch, yaw] rad/s
         enu_to_target: Target error vector in ENU frame [e, n, -d] (meters)
+        task_label: Human-readable task name (e.g. "hover", "acro")
+        min_thrust_g: Minimum thrust in g (action range lower bound)
+        max_thrust_g: Maximum thrust in g (action range upper bound)
+        max_ang_vel: Maximum angular velocities (roll, pitch, yaw) in rad/s
 
     """
     self._step_count += 1
@@ -80,8 +89,15 @@ class InferenceLogger:
     if self._step_count % self._log_interval != 0:
       return
 
+    task_str = f" [{task_label}]" if task_label else ""
     self._logger.info("-" * 40)
-    self._logger.info(f"[OUTPUT] Step {self._step_count}")
+    self._logger.info(f"[OUTPUT] Step {self._step_count}{task_str}")
+    if goal_str:
+      self._logger.info(f"  goal: {goal_str}")
+    self._logger.info(
+      f"  action_limits: thrust=[{min_thrust_g:.1f}g, {max_thrust_g:.1f}g], "
+      f"ang_vel=[{max_ang_vel[0]:.1f}, {max_ang_vel[1]:.1f}, {max_ang_vel[2]:.1f}] rad/s"
+    )
     self._logger.info(
       f"  raw_actions: [{raw_action[0]:+.4f}, {raw_action[1]:+.4f}, "
       f"{raw_action[2]:+.4f}, {raw_action[3]:+.4f}]"

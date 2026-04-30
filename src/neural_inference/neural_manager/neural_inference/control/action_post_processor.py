@@ -101,12 +101,15 @@ class ActionPostProcessor:
         "🎮 动作后处理器模式: Thrust Acceleration + Body Rates (VehicleAccRatesSetpoint)"
       )
 
-  def process_action(self, raw_action: np.ndarray) -> VehicleAccRatesSetpoint:
+  def process_action(
+    self, raw_action: np.ndarray, task_label: str = ""
+  ) -> VehicleAccRatesSetpoint:
     """
     Process raw neural network action into PX4 control message.
 
     Args:
         raw_action: Raw action from neural network [thrust, roll_rate, pitch_rate, yaw_rate]
+        task_label: Human-readable task name for logging
 
     Returns:
         VehicleAccRatesSetpoint message
@@ -142,10 +145,10 @@ class ActionPostProcessor:
 
     self._publish_angular_rates(flu_ang_vel, frd_ang_vel)
 
-    return self._create_acc_rates_message(thrust_raw, frd_ang_vel)
+    return self._create_acc_rates_message(thrust_raw, frd_ang_vel, task_label)
 
   def _create_acc_rates_message(
-    self, thrust_raw: float, frd_ang_vel: np.ndarray
+    self, thrust_raw: float, frd_ang_vel: np.ndarray, task_label: str = ""
   ) -> VehicleAccRatesSetpoint:
     """
     Create VehicleAccRatesSetpoint message.
@@ -153,6 +156,7 @@ class ActionPostProcessor:
     Args:
         thrust_raw: Normalized thrust acceleration [-1, 1]
         frd_ang_vel: Body rates in FRD frame [roll, pitch, yaw] rad/s
+        task_label: Human-readable task name for logging
 
     Returns:
         VehicleAccRatesSetpoint message
@@ -173,9 +177,10 @@ class ActionPostProcessor:
     msg.sol_time = -1.0
 
     if self._print_control_commands:
+      task_str = f" [{task_label}]" if task_label else ""
       direction = "↑ UP" if thrust_acc < 0 else ("↓ DOWN" if thrust_acc > 0 else "— ZERO")
       self._logger.info(
-        f"VehicleAccRatesSetpoint: thrust_axis_acc_sp={thrust_acc:+.3f} "
+        f"{task_str} VehicleAccRatesSetpoint: thrust_axis_acc_sp={thrust_acc:+.3f} "
         f"m/s² ({direction}), "
         f"rates_sp=[{frd_ang_vel[0]:+.3f}, {frd_ang_vel[1]:+.3f}, "
         f"{frd_ang_vel[2]:+.3f}] rad/s (FRD)"

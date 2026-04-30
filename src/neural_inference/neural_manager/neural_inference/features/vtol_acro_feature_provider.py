@@ -82,6 +82,14 @@ class VtolAcroFeatureProvider(FeatureProviderBase):
     self._ned_quat_frd = ned_quat_frd.astype(np.float32)
     self._frd_ang_vel = frd_ang_vel.astype(np.float32)
 
+  def get_goal_str(self) -> str:
+    """Get human-readable goal string for logging."""
+    g = self._gate_center
+    return (
+      f"gate_center=[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}] "
+      f"semi_major={self._semi_major:.2f} semi_short={self._semi_short:.2f}"
+    )
+
   def update_from_goal_acro(self, msg: GoalAcro) -> None:
     """Update target from GoalAcro sub-message (called by NeuralControlNode).
 

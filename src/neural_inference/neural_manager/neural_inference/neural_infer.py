@@ -37,6 +37,11 @@ from px4_msgs.msg import VehicleAccRatesSetpoint, VehicleOdometry
 
 ARTIFACTS_ROOT = Path("/home/ros")
 
+TASK_ID_TO_NAME: dict[int, str] = {
+  0: "hover",
+  1: "acro",
+}
+
 TASK_FEATURE_PROVIDERS: dict[str, type] = {
   "vtol_hover": VtolHoverFeatureProvider,
   "vtol_acro": VtolAcroFeatureProvider,
@@ -290,9 +295,11 @@ class NeuralControlNode(Node):
     self._inference_logger.log_features(obs, self._feature_specs)
 
     raw_action = self._policy_actor(obs)
-    control_msg = self._action_processor.process_action(raw_action)
+    task_label = TASK_ID_TO_NAME.get(self._current_task, "")
+    control_msg = self._action_processor.process_action(raw_action, task_label)
 
     output = self._action_processor.get_last_output()
+    limits = self._action_processor.get_processor_info()
     enu_to_target = getattr(self._feature_provider, "get_enu_to_target", lambda: np.zeros(3))()
     self._inference_logger.log_output(
       raw_action=raw_action,
@@ -300,6 +307,11 @@ class NeuralControlNode(Node):
       flu_ang_vel=output["flu_ang_vel"],
       frd_ang_vel=output["frd_ang_vel"],
       enu_to_target=enu_to_target,
+      task_label=task_label,
+      goal_str=self._feature_provider.get_goal_str(),
+      min_thrust_g=limits["min_thrust_g"],
+      max_thrust_g=limits["max_thrust_g"],
+      max_ang_vel=limits["max_ang_vel"],
     )
 
     self._control_pub.publish(control_msg)

@@ -85,6 +85,11 @@ class VtolHoverFeatureProvider(FeatureProviderBase):
     self._ned_quat_frd = self._ensure_float32(ned_quat_frd)
     self._frd_ang_vel = self._ensure_float32(frd_ang_vel)
 
+  def get_goal_str(self) -> str:
+    """Get human-readable goal string for logging."""
+    p = self._ned_target_position
+    return f"ned_target=[{p[0]:.2f}, {p[1]:.2f}, {p[2]:.2f}]"
+
   def update_from_goal_hover(self, msg: GoalHover) -> None:
     """Update target from GoalHover sub-message (called by NeuralControlNode).
 

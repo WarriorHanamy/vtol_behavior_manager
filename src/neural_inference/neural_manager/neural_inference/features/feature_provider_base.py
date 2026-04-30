@@ -327,6 +327,15 @@ class FeatureProviderBase:
 
     return feature
 
+  def get_goal_str(self) -> str:
+    """Get human-readable goal string for logging.
+
+    Returns:
+        String representation of the current goal, or empty string if none.
+
+    """
+    return ""
+
   def get_feature_specs(self) -> list[FeatureSpec]:
     """Get feature specifications list.
 
