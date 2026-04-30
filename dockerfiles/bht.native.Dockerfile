@@ -87,6 +87,7 @@ WORKDIR ${WS_DIR}/src
 
 # Copy source code
 COPY --chown=ros:ros src/px4_msgs ./px4_msgs
+COPY --chown=ros:ros src/goal_msgs ./goal_msgs
 COPY --chown=ros:ros src/neural_manager ./neural_manager
 # Fix px4_msgs versioned messages
 RUN cp -r px4_msgs/msg/versioned/* px4_msgs/msg/ || true
@@ -100,8 +101,16 @@ RUN source /opt/ros/humble/setup.bash && \
   --packages-select px4_msgs \
   --parallel-workers 4
 
+# Build goal_msgs (dependency of neural_gate)
+RUN source /opt/ros/humble/setup.bash && \
+  source install/setup.bash && \
+  colcon build \
+  --packages-select goal_msgs \
+  --parallel-workers 4
+
 # Compile ROS packages natively
 RUN source /opt/ros/humble/setup.bash && \
+  source install/setup.bash && \
   colcon build \
   --packages-select neural_gate \
   --parallel-workers 4 \

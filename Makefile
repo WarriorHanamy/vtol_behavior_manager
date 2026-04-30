@@ -226,7 +226,7 @@ sync-policies:
 	docker cp "$(POLICIES_SRC)/." "$$CONTAINER":/home/ros/policies/ && \
 	echo ">>> Done. Policies copied to /home/ros/policies/"
 
-TASK ?= hover
+TASK ?= acro
 
 .PHONY: neural-infer
 
@@ -248,8 +248,10 @@ neural-infer: sync-policies
 	docker exec "$$CONTAINER" bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && colcon build --packages-select goal_msgs neural_gate neural_inference 2>&1" | tail -5; \
 	SESSION="vtol-neural"; \
 	tmux has-session -t $$SESSION 2>/dev/null && tmux kill-session -t $$SESSION; \
-	tmux new-session -d -s $$SESSION; "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && exec bash'"; \
-	tmux new-window -t $$SESSION -n all "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_inference neural_gate.launch.py task:=$(TASK)'"; \
+	tmux new-session -d -s $$SESSION; \
+	tmux send-keys -t $$SESSION "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && exec bash'" Enter; \
+	tmux new-window -t $$SESSION -n all; \
+	tmux send-keys -t $$SESSION:all "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_inference neural_gate.launch.py task:=$(TASK)'" Enter; \
 	echo ">>> Tmux session '$$SESSION' created:"; \
 	echo "    - all:  Gate ($(TASK)) + Inference (lifecycle)"; \
 	echo ">>> Attaching... (detach with Ctrl+b then d)"; \

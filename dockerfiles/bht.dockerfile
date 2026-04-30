@@ -60,7 +60,13 @@ RUN cp -r src/px4_msgs/msg/versioned/* src/px4_msgs/msg/ && \
   source /opt/ros/humble/setup.bash && \
   colcon build --packages-select px4_msgs
 
-# Layer 2: neural_gate (most frequently changed)
+# Layer 2: goal_msgs (depended on by neural_gate)
+COPY --chown=ros:ros src/goal_msgs src/goal_msgs
+RUN source /opt/ros/humble/setup.bash && \
+  source install/setup.bash && \
+  colcon build --packages-select goal_msgs
+
+# Layer 3: neural_gate (most frequently changed)
 COPY --chown=ros:ros src/neural_manager src/neural_manager
 RUN source /opt/ros/humble/setup.bash && \
   source install/setup.bash && \

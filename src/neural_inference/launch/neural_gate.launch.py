@@ -69,6 +69,7 @@ def generate_launch_description():
     package="neural_inference",
     executable="neural_infer_node",
     name="neural_infer_node",
+    namespace="",
     output="screen",
     parameters=[params_file],
     arguments=LOG_ARGS,
