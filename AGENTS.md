@@ -26,9 +26,8 @@ Never use Optional for type hinting.
 
 ## Running Python
 
-Use `uv run --non-sync python` to run Python scripts to avoid asyncio event loop issues:
 ```bash
-uv run --non-sync python script.py
+uv run --no-sync python script.py
 ```
 
 ## Math Conventions
@@ -39,3 +38,15 @@ uv run --non-sync python script.py
 - A frame-specific quaternion must encode both frames in its name using `source_quat_target`, for example `ned_quat_frd` and `enu_quat_flu`.
 - Do not use bare names like `quat` for frame-specific quaternions, except when accessing external-library fields such as `msg.q`.
 - Any quaternion returned by a `get_*` method must be canonicalized so `quat[0] >= 0`.
+
+## Testing
+
+All tests run inside the bht container. No host-side mocking.
+
+```bash
+make test    # copy test/ + src/ to container, source setup.bash, pytest -v
+```
+
+Pipeline: copy → source setup.bash → `python3 -m pytest test/ -v`
+
+Requires `make sim` (or manually start bht container) first.

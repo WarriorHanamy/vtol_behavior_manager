@@ -13,7 +13,11 @@ from .feature_provider_base import (
 )
 from .revision_context import RevisionContext
 from .revision_discoverer import RevisionDiscoverer
-from .vtol_feature_provider import VtolFeatureProvider
+from .vtol_acro_feature_provider import VtolAcroFeatureProvider
+from .vtol_hover_feature_provider import VtolHoverFeatureProvider
+
+# Backward compatibility alias
+VtolFeatureProvider = VtolHoverFeatureProvider
 
 __all__ = [
   "FeatureProviderBase",
@@ -21,5 +25,7 @@ __all__ = [
   "FeatureValidationResult",
   "RevisionContext",
   "RevisionDiscoverer",
+  "VtolAcroFeatureProvider",
   "VtolFeatureProvider",
+  "VtolHoverFeatureProvider",
 ]

@@ -175,8 +175,10 @@ class ActionPostProcessor:
     if self._print_control_commands:
       direction = "↑ UP" if thrust_acc < 0 else ("↓ DOWN" if thrust_acc > 0 else "— ZERO")
       self._logger.info(
-        f"VehicleAccRatesSetpoint: thrust_axis_acc_sp={thrust_acc:+.3f} m/s² ({direction}), "
-        f"rates_sp=[{frd_ang_vel[0]:+.3f}, {frd_ang_vel[1]:+.3f}, {frd_ang_vel[2]:+.3f}] rad/s (FRD)"
+        f"VehicleAccRatesSetpoint: thrust_axis_acc_sp={thrust_acc:+.3f} "
+        f"m/s² ({direction}), "
+        f"rates_sp=[{frd_ang_vel[0]:+.3f}, {frd_ang_vel[1]:+.3f}, "
+        f"{frd_ang_vel[2]:+.3f}] rad/s (FRD)"
       )
 
     return msg
@@ -332,7 +334,7 @@ class ActionPostProcessor:
     Print control command in human-readable format.
 
     Args:
-        action_display_dict: Dictionary with formatted action values from convert_action_for_display
+        action_display_dict: Formatted action values from convert_action_for_display
         prefix: Optional prefix string for the output
     """
     if not self._print_control_commands or action_display_dict is None:

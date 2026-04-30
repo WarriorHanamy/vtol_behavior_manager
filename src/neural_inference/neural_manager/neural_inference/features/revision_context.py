@@ -68,9 +68,9 @@ class RevisionContext:
     specs = [FeatureSpec(name=f["name"], dim=f["dim"]) for f in meta.get("low_dim", [])]
     obs_dim = sum(s.dim for s in specs)
 
-    engine_path = latest / "vtol_hover.fp16.engine"
-    if not engine_path.exists():
-      engine_path = None
+    # Look for any TensorRT engine file in the revision directory
+    engine_files = list(latest.glob("*.fp16.engine"))
+    engine_path = engine_files[0] if engine_files else None
 
     return cls(
       revision_path=latest,

@@ -147,7 +147,9 @@ class ControlPublisher:
       return msg
     else:
       # Use mock message for testing
-      return NeuralControlMessage(timestamp=timestamp, acc_p_z=float(acc_p_z), bodyrate=bodyrate.copy())
+      return NeuralControlMessage(
+        timestamp=timestamp, acc_p_z=float(acc_p_z), bodyrate=bodyrate.copy()
+      )
 
   def publish(self, acc_p_z: float, bodyrate: np.ndarray, timestamp: int) -> bool:
     """Create and publish a control message.

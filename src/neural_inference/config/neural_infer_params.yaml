@@ -1,0 +1,28 @@
+# Neural Inference Node Parameters
+# Used by: ros2 launch neural_inference neural_gate.launch.py
+
+neural_infer_node:
+  ros__parameters:
+    # Topics
+    setpoint_topic: "/fmu/in/vehicle_acc_rates_setpoint"
+    odometry_topic: "/fmu/out/vehicle_odometry"
+    target_topic: "/neural/target"
+
+    # Inference backend
+    inference_backend: "onnx"          # "onnx" | "tensorrt"
+    inference_providers: ["CPUExecutionProvider"]
+    engine_path: ""
+
+    # Control
+    inference_hz: 50.0
+    odom_rate: 100.0
+    use_tanh_activation: false
+    enable_action_clipping: true
+    acc_fixed: false
+
+    # Debug
+    print_observation: false
+    print_control: false
+    log_interval: 10
+    enable_features: false
+    features_log_file: "/tmp/neural_features.log"

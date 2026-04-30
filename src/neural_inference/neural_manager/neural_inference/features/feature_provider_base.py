@@ -310,9 +310,8 @@ class FeatureProviderBase:
     spec = next((s for s in self._metadata if s.name == name), None)
 
     if spec is None:
-      raise ValueError(
-        f"Feature '{name}' not found in metadata. Available features: {[s.name for s in self._metadata]}"
-      )
+      available = [s.name for s in self._metadata]
+      raise ValueError(f"Feature '{name}' not found in metadata. Available features: {available}")
 
     # Get the feature
     method_name = f"get_{name}"
@@ -322,7 +321,9 @@ class FeatureProviderBase:
     # Validate dimension
     actual_dim = len(feature) if hasattr(feature, "__len__") else 1
     if actual_dim != spec.dim:
-      raise ValueError(f"Feature '{name}' dimension mismatch: expected {spec.dim}, got {actual_dim}")
+      raise ValueError(
+        f"Feature '{name}' dimension mismatch: expected {spec.dim}, got {actual_dim}"
+      )
 
     return feature
 

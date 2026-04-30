@@ -134,7 +134,9 @@ def ned_quat_frd_to_enu_quat_flu(ned_quat_frd: np.ndarray) -> np.ndarray:
   q_frd_to_flu = np.array([0.0, 1.0, 0.0, 0.0], dtype=dtype)
   q_enu_to_ned = np.array([0.0, sqrt_half, sqrt_half, 0.0], dtype=dtype)
 
-  enu_quat_flu = quat_multiply(q_enu_to_ned, quat_multiply(ned_quat_frd.astype(dtype), q_frd_to_flu))
+  enu_quat_flu = quat_multiply(
+    q_enu_to_ned, quat_multiply(ned_quat_frd.astype(dtype), q_frd_to_flu)
+  )
   return canonicalize_quat_w_positive(enu_quat_flu)
 
 

@@ -3,20 +3,21 @@ All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
 
-VTOL Feature Provider Module
+VTOL Hover Feature Provider Module
 
-This module provides platform-specific feature provider for VTOL vehicles,
+This module provides platform-specific feature provider for VTOL hover task,
 implementing coordinate transformations and sensor data processing.
+
+Note: ROS subscriptions are managed by NeuralControlNode, not by this class.
 """
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import numpy as np
-from rclpy.qos import qos_profile_sensor_data
 
+from goal_msgs.msg import GoalHover
 from neural_manager.neural_inference.math_utils import (
   canonicalize_quat_w_positive,
   frd_flu_rotate,
@@ -24,28 +25,23 @@ from neural_manager.neural_inference.math_utils import (
   ned_quat_frd_to_enu_quat_flu,
   ned_to_frd_rotate,
 )
-from px4_msgs.msg import TrajectorySetpoint, VehicleOdometry
 
 from .feature_provider_base import FeatureProviderBase
-from .protocols import InferenceNodeProtocol
 
 
-class VtolFeatureProvider(FeatureProviderBase):
-  """Platform-specific VTOL feature provider.
+class VtolHoverFeatureProvider(FeatureProviderBase):
+  """Platform-specific VTOL hover feature provider.
 
-  This provider implements feature computation for VTOL vehicles with
-  coordinate transformations from PX4 NED frame to neural network FLU frame.
+  Feature computation for VTOL hover task with coordinate transformations
+  from PX4 NED frame to neural network FLU frame.
 
-  Sensor Data Buffers:
+  Sensor Data Buffers (updated externally by NeuralControlNode):
   - _ned_position: Vehicle position in NED frame [N, E, D] (meters)
   - _ned_velocity: Vehicle velocity in NED frame [N, E, D] (m/s)
   - _ned_quat_frd: Vehicle orientation quaternion [w, x, y, z] (Hamilton)
   - _frd_ang_vel: Angular velocity in FRD frame [roll, pitch, yaw] (rad/s)
   - _ned_target_position: Target position in NED frame [N, E, D] (meters)
   - _last_action: Buffered action vector [thrust, roll_rate, pitch_rate, yaw_rate]
-
-  Constants:
-  - GRAVITY_ACCEL: Standard gravity acceleration in m/s^2
   """
 
   GRAVITY_ACCEL: float = 9.81
@@ -53,21 +49,12 @@ class VtolFeatureProvider(FeatureProviderBase):
   def __init__(
     self,
     metadata_path: Path | str,
-    node: InferenceNodeProtocol | None = None,
+    node=None,
     odometry_topic: str | None = None,
     target_topic: str | None = None,
     odom_rate: float = 100.0,
     inference_rate: float = 50.0,
   ):
-    """Initialize the VTOL feature provider.
-
-    Args:
-        metadata_path: Path to observation_metadata.yaml file
-        node: Optional inference node for subscription and inference trigger
-        odometry_topic: Optional ROS2 topic for vehicle odometry
-        target_topic: Optional ROS2 topic for target setpoint
-
-    """
     self._ned_position: np.ndarray = np.zeros(3, dtype=np.float32)
     self._ned_velocity: np.ndarray = np.zeros(3, dtype=np.float32)
     self._ned_quat_frd: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
@@ -75,71 +62,7 @@ class VtolFeatureProvider(FeatureProviderBase):
     self._ned_target_position: np.ndarray = np.zeros(3, dtype=np.float32)
     self._last_action: np.ndarray = np.zeros(4, dtype=np.float32)
 
-    self._node: InferenceNodeProtocol | None = node
-    self._odom_sub = None
-    self._target_sub = None
-    self._has_received_target: bool = False
-    self._warned_waiting_for_target: bool = False
-
-    self._odom_count: int = 0
-    self._inference_interval: int = max(1, round(odom_rate / inference_rate))
-
     super().__init__(metadata_path)
-
-    if node is not None:
-      if odometry_topic:
-        self._odom_sub = node.create_subscription(
-          VehicleOdometry,
-          odometry_topic,
-          self._on_odometry,
-          qos_profile_sensor_data,
-        )
-      if target_topic:
-        self._target_sub = node.create_subscription(
-          TrajectorySetpoint,
-          target_topic,
-          self._on_target,
-          qos_profile_sensor_data,
-        )
-
-  def _on_odometry(self, msg: VehicleOdometry) -> None:
-    """Handle odometry message and trigger inference.
-
-    Args:
-        msg: VehicleOdometry message from PX4
-
-    """
-    ned_position = np.array([msg.position[0], msg.position[1], msg.position[2]], dtype=np.float32)
-    ned_velocity = np.array([msg.velocity[0], msg.velocity[1], msg.velocity[2]], dtype=np.float32)
-    ned_quat_frd = np.array([msg.q[0], msg.q[1], msg.q[2], msg.q[3]], dtype=np.float32)
-    frd_ang_vel = np.array(
-      [msg.angular_velocity[0], msg.angular_velocity[1], msg.angular_velocity[2]],
-      dtype=np.float32,
-    )
-    self.update_vehicle_odom(ned_position, ned_velocity, ned_quat_frd, frd_ang_vel)
-
-    if not self._has_received_target:
-      if self._node is not None and not self._warned_waiting_for_target:
-        self._node.get_logger().warn("Waiting for /neural/target before running inference...")
-        self._warned_waiting_for_target = True
-      return
-
-    self._odom_count += 1
-    if self._odom_count >= self._inference_interval:
-      self._odom_count = 0
-      if self._node is not None:
-        self._node.run_inference()
-
-  def _on_target(self, msg: TrajectorySetpoint) -> None:
-    """Handle target setpoint message.
-
-    Args:
-        msg: TrajectorySetpoint message containing target position
-
-    """
-    if not any(math.isnan(x) for x in msg.position):
-      self._ned_target_position = np.array(msg.position, dtype=np.float32)
-      self._has_received_target = True
 
   def update_vehicle_odom(
     self,
@@ -148,7 +71,7 @@ class VtolFeatureProvider(FeatureProviderBase):
     ned_quat_frd: np.ndarray,
     frd_ang_vel: np.ndarray,
   ) -> None:
-    """Update vehicle odometry data.
+    """Update vehicle odometry data (called by NeuralControlNode).
 
     Args:
         ned_position: Vehicle position in NED frame [N, E, D] (meters)
@@ -162,14 +85,17 @@ class VtolFeatureProvider(FeatureProviderBase):
     self._ned_quat_frd = self._ensure_float32(ned_quat_frd)
     self._frd_ang_vel = self._ensure_float32(frd_ang_vel)
 
-  def update_target(self, ned_target_position: np.ndarray) -> None:
-    """Update target position.
+  def update_from_goal_hover(self, msg: GoalHover) -> None:
+    """Update target from GoalHover sub-message (called by NeuralControlNode).
 
     Args:
-        ned_target_position: Target position in NED frame [N, E, D] (meters)
+        msg: GoalHover message containing target position
 
     """
-    self._ned_target_position = self._ensure_float32(ned_target_position)
+    import math
+
+    if not any(math.isnan(x) for x in msg.position):
+      self._ned_target_position = np.array(msg.position, dtype=np.float32)
 
   def update_last_action(self, action: np.ndarray) -> None:
     """Buffer the last action vector.
@@ -210,8 +136,6 @@ class VtolFeatureProvider(FeatureProviderBase):
   def get_flu_grav_dir(self) -> np.ndarray:
     """Get gravity direction vector in FLU body frame.
 
-    Computes: Project gravity vector [0, 0, 9.81] from world to body frame and normalize
-
     Returns:
         3D normalized numpy array in FLU frame
 
@@ -225,8 +149,6 @@ class VtolFeatureProvider(FeatureProviderBase):
   def get_flu_vel(self) -> np.ndarray:
     """Get linear velocity in FLU body frame.
 
-    Computes: Transform linear velocity from NED world frame to FLU body frame
-
     Returns:
         3D numpy array in FLU frame
 
@@ -237,8 +159,6 @@ class VtolFeatureProvider(FeatureProviderBase):
 
   def get_flu_ang_vel(self) -> np.ndarray:
     """Get angular velocity in FLU body frame.
-
-    Computes: Transform angular velocity from FRD to FLU
 
     Returns:
         3D numpy array in FLU frame
@@ -258,8 +178,6 @@ class VtolFeatureProvider(FeatureProviderBase):
 
   def get_enu_quat_flu(self) -> np.ndarray:
     """Get orientation quaternion in ENU FLU frame.
-
-    Transforms quaternion from NED FRD frame to ENU FLU frame.
 
     Returns:
         4D numpy array [w, x, y, z] quaternion in ENU FLU frame
@@ -281,13 +199,7 @@ class VtolFeatureProvider(FeatureProviderBase):
     """Get raw sensor data before feature transformation.
 
     Returns:
-        Dictionary containing raw sensor data for logging:
-        - ned_position: Position in NED frame
-        - ned_velocity: Velocity in NED frame
-        - ned_quat_frd: Orientation quaternion [w, x, y, z]
-        - frd_ang_vel: Angular velocity in FRD frame
-        - ned_target_position: Target position in NED frame
-        - last_action: Last action vector
+        Dictionary containing raw sensor data for logging
 
     """
     return {
@@ -300,13 +212,5 @@ class VtolFeatureProvider(FeatureProviderBase):
     }
 
   def _ensure_float32(self, arr: np.ndarray) -> np.ndarray:
-    """Ensure numpy array is float32 dtype.
-
-    Args:
-        arr: Input numpy array
-
-    Returns:
-        Array converted to float32 dtype
-
-    """
+    """Ensure numpy array is float32 dtype."""
     return arr.astype(np.float32)

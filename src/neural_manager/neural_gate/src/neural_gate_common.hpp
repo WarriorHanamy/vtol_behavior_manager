@@ -2,28 +2,27 @@
 // All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Neural Gate Node
+// Neural Gate Node — shared implementation header
 //
-// A single-file ROS2 node with two responsibilities:
-// 1. Publish /neural/target when in POSCTL mode (current position + offset).
+// A ROS2 node with two responsibilities:
+// 1. Publish /neural/target (NeuralTarget) when in POSCTL mode.
 // 2. Listen to RC trigger (button and aux1) to switch to offboard mode.
 //
 // State machine based on VehicleStatus nav_state:
 //   - POSCTL: publish target, allow trigger to switch to offboard
 //   - OFFBOARD: do nothing, neural network is in control
 //   - default: WARN, do nothing
-//
-// Parameters:
-//   button_mask (int): bitmask for button trigger (default 1024)
-//   aux1_on_threshold (double): aux1 value above which trigger activates (default 0.6)
-//   aux1_off_threshold (double): aux1 value below which trigger deactivates (default 0.4)
-//   target_offset (vector<double>): [x, y, z] offset added to current position
+
+#ifndef NEURAL_GATE_COMMON_HPP_
+#define NEURAL_GATE_COMMON_HPP_
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <goal_msgs/msg/goal_acro.hpp>
+#include <goal_msgs/msg/goal_hover.hpp>
+#include <goal_msgs/msg/neural_target.hpp>
 #include <px4_msgs/msg/manual_control_setpoint.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
-#include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
 #include <px4_msgs/msg/vehicle_command_ack.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
@@ -32,35 +31,33 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <string>
+
+/**
+ * Configuration for a neural gate node variant.
+ *
+ * Each variant sets task_type and the corresponding goal parameters.
+ * Unused parameters are ignored.
+ */
+struct NeuralGateConfig {
+  uint8_t task_type;
+  uint16_t button_mask = 1024;
+  double aux1_on_threshold = 0.6;
+  double aux1_off_threshold = 0.4;
+  std::array<double, 3> target_offset = {0.0, 0.0, 0.0};
+  std::array<double, 3> gate_center = {3.5, 0.0, 1.5};
+  double semi_major = 0.3;
+  double semi_short = 0.2;
+};
 
 class NeuralGateNode : public rclcpp::Node {
 public:
-  NeuralGateNode() : Node("neural_gate") {
-    // Parameters
-    this->declare_parameter<int>("button_mask", 1024);
-    this->declare_parameter<double>("aux1_on_threshold", 0.6);
-    this->declare_parameter<double>("aux1_off_threshold", 0.4);
-    this->declare_parameter<std::vector<double>>("target_offset",
-                                                 {0.0, 0.0, 0.0});
-
-    button_mask_ =
-        static_cast<uint16_t>(this->get_parameter("button_mask").as_int());
-    aux1_on_threshold_ = this->get_parameter("aux1_on_threshold").as_double();
-    aux1_off_threshold_ = this->get_parameter("aux1_off_threshold").as_double();
-
-    std::vector<double> offset_param =
-        this->get_parameter("target_offset").as_double_array();
-    if (offset_param.size() == 3) {
-      target_offset_ = {offset_param[0], offset_param[1], offset_param[2]};
-    } else {
-      RCLCPP_WARN(this->get_logger(),
-                  "target_offset must have 3 elements, using default [0,0,0]");
-      target_offset_ = {0.0, 0.0, 0.0};
-    }
-
-    // Publishers
-    target_pub_ = this->create_publisher<px4_msgs::msg::TrajectorySetpoint>(
+  explicit NeuralGateNode(const NeuralGateConfig& cfg)
+      : Node("neural_gate"), cfg_(cfg) {
+    // Publishers — single unified target publisher
+    target_pub_ = this->create_publisher<goal_msgs::msg::NeuralTarget>(
         "/neural/target", 10);
+
     offboard_mode_pub_ =
         this->create_publisher<px4_msgs::msg::OffboardControlMode>(
             "/fmu/in/offboard_control_mode", 1);
@@ -121,8 +118,17 @@ public:
                                 [this]() { publishOffboardHeartbeat(); });
 
     RCLCPP_INFO(this->get_logger(), "[GATE] NeuralGate node initialized");
-    RCLCPP_INFO(this->get_logger(), "[GATE]   target_offset: [%.2f, %.2f, %.2f]",
-                target_offset_[0], target_offset_[1], target_offset_[2]);
+    if (cfg_.task_type == goal_msgs::msg::NeuralTarget::TASK_ACRO) {
+      RCLCPP_INFO(this->get_logger(), "[GATE]   task_type: acro");
+      RCLCPP_INFO(this->get_logger(), "[GATE]   gate_center: [%.2f, %.2f, %.2f]",
+                  cfg_.gate_center[0], cfg_.gate_center[1], cfg_.gate_center[2]);
+      RCLCPP_INFO(this->get_logger(), "[GATE]   semi_major: %.2f, semi_short: %.2f",
+                  cfg_.semi_major, cfg_.semi_short);
+    } else {
+      RCLCPP_INFO(this->get_logger(), "[GATE]   task_type: hover");
+      RCLCPP_INFO(this->get_logger(), "[GATE]   target_offset: [%.2f, %.2f, %.2f]",
+                  cfg_.target_offset[0], cfg_.target_offset[1], cfg_.target_offset[2]);
+    }
   }
 
 private:
@@ -135,14 +141,14 @@ private:
       return false;
     }
 
-    bool button_active = (rc_buttons_ & button_mask_) == button_mask_;
+    bool button_active = (rc_buttons_ & cfg_.button_mask) == cfg_.button_mask;
     bool button_edge = button_active && !prev_button_active_;
     prev_button_active_ = button_active;
 
     bool aux1_active;
-    if (rc_aux1_ > static_cast<float>(aux1_on_threshold_)) {
+    if (rc_aux1_ > static_cast<float>(cfg_.aux1_on_threshold)) {
       aux1_active = true;
-    } else if (rc_aux1_ < static_cast<float>(aux1_off_threshold_)) {
+    } else if (rc_aux1_ < static_cast<float>(cfg_.aux1_off_threshold)) {
       aux1_active = false;
     } else {
       aux1_active = prev_aux1_active_;
@@ -154,18 +160,25 @@ private:
   }
 
   void publishTarget() {
-    px4_msgs::msg::TrajectorySetpoint msg;
-    msg.timestamp =
-        static_cast<uint64_t>(this->get_clock()->now().nanoseconds() / 1000);
-    msg.position[0] = static_cast<float>(ned_position_[0] + target_offset_[0]);
-    msg.position[1] = static_cast<float>(ned_position_[1] + target_offset_[1]);
-    msg.position[2] = static_cast<float>(ned_position_[2] + target_offset_[2]);
-    msg.velocity[0] = NAN;
-    msg.velocity[1] = NAN;
-    msg.velocity[2] = NAN;
-    msg.acceleration[0] = NAN;
-    msg.acceleration[1] = NAN;
-    msg.acceleration[2] = NAN;
+    goal_msgs::msg::NeuralTarget msg;
+    msg.task_type = cfg_.task_type;
+
+    if (cfg_.task_type == goal_msgs::msg::NeuralTarget::TASK_ACRO) {
+      msg.goal_acro.gate_center[0] = static_cast<float>(cfg_.gate_center[0]);
+      msg.goal_acro.gate_center[1] = static_cast<float>(cfg_.gate_center[1]);
+      msg.goal_acro.gate_center[2] = static_cast<float>(cfg_.gate_center[2]);
+      msg.goal_acro.semi_major = static_cast<float>(cfg_.semi_major);
+      msg.goal_acro.semi_short = static_cast<float>(cfg_.semi_short);
+    } else {
+      msg.goal_hover.position[0] =
+          static_cast<float>(ned_position_[0] + cfg_.target_offset[0]);
+      msg.goal_hover.position[1] =
+          static_cast<float>(ned_position_[1] + cfg_.target_offset[1]);
+      msg.goal_hover.position[2] =
+          static_cast<float>(ned_position_[2] + cfg_.target_offset[2]);
+      msg.goal_hover.yaw = NAN;
+    }
+
     target_pub_->publish(msg);
   }
 
@@ -204,8 +217,13 @@ private:
     switch (px4_nav_state_) {
       case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL:
         if (position_valid_) {
+          const char* task_str =
+              (cfg_.task_type == goal_msgs::msg::NeuralTarget::TASK_ACRO)
+                  ? "acro"
+                  : "hover";
           RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                               "[GATE] POSCTL - publishing /neural/target");
+                               "[GATE] POSCTL - publishing /neural/target (%s)",
+                               task_str);
           publishTarget();
         } else {
           RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
@@ -228,11 +246,8 @@ private:
     }
   }
 
-  // Parameters
-  uint16_t button_mask_;
-  double aux1_on_threshold_;
-  double aux1_off_threshold_;
-  std::array<double, 3> target_offset_;
+  // Config
+  NeuralGateConfig cfg_;
 
   // State
   bool position_valid_ = false;
@@ -248,7 +263,7 @@ private:
   uint8_t px4_nav_state_ = 0;
 
   // ROS interfaces
-  rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr target_pub_;
+  rclcpp::Publisher<goal_msgs::msg::NeuralTarget>::SharedPtr target_pub_;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
       offboard_mode_pub_;
   rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_cmd_pub_;
@@ -262,10 +277,4 @@ private:
   rclcpp::TimerBase::SharedPtr offboard_heartbeat_timer_;
 };
 
-int main(int argc, char *argv[]) {
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<NeuralGateNode>();
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
-}
+#endif  // NEURAL_GATE_COMMON_HPP_

@@ -115,13 +115,50 @@ docker-offload-ros2BuildTask:
 	@docker rm -f $(VTOL_OFFLOAD_CONTAINER) > /dev/null 2>&1 || true
 	@mkdir -p build
 	@docker run --rm -d --name $(VTOL_OFFLOAD_CONTAINER) $(VTOL_OFFLOAD_IMAGE) sleep infinity
+	@docker cp src/goal_msgs $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
 	@docker cp src/neural_manager $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
+	@docker cp src/neural_inference $(VTOL_OFFLOAD_CONTAINER):/home/ros/ros2_ws/src/
 	@docker exec $(VTOL_OFFLOAD_CONTAINER) bash -lc \
 		"source /opt/ros/humble/setup.bash && \
 		 source /home/ros/ros2_ws/install/setup.bash && \
-		 colcon build --packages-select neural_gate 2>&1" | tee build/compile.log
+		 colcon build --packages-select goal_msgs neural_gate neural_inference 2>&1" | tee build/compile.log
 	@docker stop $(VTOL_OFFLOAD_CONTAINER) > /dev/null
 	@echo ">>> Build log: build/compile.log"
+
+# =============================================================================
+# Test: run pytest inside bht container (requires make sim or manual start)
+#
+# Pipeline:
+#   make test
+#     ├─ copy test/ + src/ to container
+#     ├─ source setup.bash
+#     └─ python3 -m pytest test/ -v
+# =============================================================================
+
+.PHONY: test
+
+test:
+	@CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
+	if [ -z "$$CONTAINER" ]; then \
+		echo "ERROR: bht container not running. Use 'make sim' first."; \
+		exit 1; \
+	fi; \
+	docker exec "$$CONTAINER" bash -lc 'rm -rf /home/ros/src /home/ros/test'; \
+	docker cp test/. $$CONTAINER:/home/ros/test/; \
+	docker cp src/. $$CONTAINER:/home/ros/src/; \
+	docker cp src/goal_msgs/. $$CONTAINER:/home/ros/ros2_ws/src/goal_msgs/; \
+	echo ">>> Rebuilding goal_msgs for NeuralTarget..."; \
+	docker exec $$CONTAINER bash -lc "\
+		source /opt/ros/humble/setup.bash && \
+		cd /home/ros/ros2_ws && \
+		colcon build --packages-select goal_msgs px4_msgs 2>&1" | tail -3; \
+	echo ">>> Running tests..."; \
+	docker exec $$CONTAINER bash -lc "\
+		source /opt/ros/humble/setup.bash && \
+		source /home/ros/ros2_ws/install/setup.bash && \
+		cd /home/ros && \
+		find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; \
+		PYTHONPATH=/home/ros/src/neural_inference:/home/ros/src:\$$PYTHONPATH python3 -m pytest test/ -v"
 
 # =============================================================================
 # Submodule Sync
@@ -189,28 +226,32 @@ sync-policies:
 	docker cp "$(POLICIES_SRC)/." "$$CONTAINER":/home/ros/policies/ && \
 	echo ">>> Done. Policies copied to /home/ros/policies/"
 
+TASK ?= hover
+
 .PHONY: neural-infer
 
 neural-infer: sync-policies
 	@echo ">>> Starting neural services in tmux session 'vtol-neural'..."
+	@echo ">>> Task: $(TASK)"
 	@CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 	if [ -z "$$CONTAINER" ]; then \
 		echo "Error: bht container not running. Use 'make sim' first."; \
 		exit 1; \
 	fi; \
 	echo ">>> Killing legacy neural processes..."; \
-	docker exec "$$CONTAINER" bash -lc 'pkill -f neural_gate_node || true; pkill -f neural_gate.launch.py || true; pkill -f neural_infer || true'; \
+	docker exec "$$CONTAINER" bash -lc 'pkill -f neural_gate || true; pkill -f neural_infer || true'; \
 	sleep 1; \
 	echo ">>> Syncing src to container..."; \
+	docker exec "$$CONTAINER" bash -lc 'rm -rf /home/ros/ros2_ws/src/neural_manager /home/ros/ros2_ws/src/neural_inference /home/ros/ros2_ws/src/goal_msgs'; \
 	docker cp src/. "$$CONTAINER":/home/ros/ros2_ws/src/; \
+	echo ">>> Building packages..."; \
+	docker exec "$$CONTAINER" bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && colcon build --packages-select goal_msgs neural_gate neural_inference 2>&1" | tail -5; \
 	SESSION="vtol-neural"; \
 	tmux has-session -t $$SESSION 2>/dev/null && tmux kill-session -t $$SESSION; \
 	tmux new-session -d -s $$SESSION; "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && exec bash'"; \
-	tmux new-window -t $$SESSION -n gate "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_gate neural_gate.launch.py'"; \
-	tmux new-window -t $$SESSION -n infer "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer'"; \
-	echo ">>> Tmux session '$$SESSION' created with 2 windows:"; \
-	echo "    - gate:   Neural Gate launch"; \
-	echo "    - infer:  Neural Inference"; \
+	tmux new-window -t $$SESSION -n all "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_inference neural_gate.launch.py task:=$(TASK)'"; \
+	echo ">>> Tmux session '$$SESSION' created:"; \
+	echo "    - all:  Gate ($(TASK)) + Inference (lifecycle)"; \
 	echo ">>> Attaching... (detach with Ctrl+b then d)"; \
 	sleep 1; \
 	exec tmux attach -t $$SESSION
