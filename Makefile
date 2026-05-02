@@ -231,12 +231,21 @@ TASK ?= acro
 .PHONY: neural-infer
 
 neural-infer: sync-policies
+	@command -v tmux >/dev/null 2>&1 || { echo "Error: tmux is not installed"; exit 1; }
 	@echo ">>> Starting neural services in tmux session 'vtol-neural'..."
 	@echo ">>> Task: $(TASK)"
 	@CONTAINER=$$(docker ps --filter "name=bht" --format "{{.Names}}" | head -n 1); \
 	if [ -z "$$CONTAINER" ]; then \
 		echo "Error: bht container not running. Use 'make sim' first."; \
 		exit 1; \
+	fi; \
+	DUSER=$$(docker exec "$$CONTAINER" bash -lc 'id -u ros 2>/dev/null' 2>/dev/null); \
+	if [ -n "$$DUSER" ]; then \
+		DUSER_FLAG="-u ros"; \
+		echo ">>> Container user: ros"; \
+	else \
+		DUSER_FLAG=""; \
+		echo ">>> Container user: default (ros user not found, rebuild image recommended)"; \
 	fi; \
 	echo ">>> Killing legacy neural processes..."; \
 	docker exec "$$CONTAINER" bash -lc 'pkill -f neural_gate || true; pkill -f neural_infer || true'; \
@@ -248,14 +257,16 @@ neural-infer: sync-policies
 	docker exec "$$CONTAINER" bash -lc "source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && colcon build --packages-select goal_msgs neural_gate neural_inference 2>&1" | tail -5; \
 	SESSION="vtol-neural"; \
 	tmux has-session -t $$SESSION 2>/dev/null && tmux kill-session -t $$SESSION; \
-	tmux new-session -d -s $$SESSION; \
-	tmux send-keys -t $$SESSION "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && exec bash'" Enter; \
-	tmux new-window -t $$SESSION -n all; \
-	tmux send-keys -t $$SESSION:all "docker exec -i -u ros $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_inference neural_gate.launch.py task:=$(TASK)'" Enter; \
-	echo ">>> Tmux session '$$SESSION' created:"; \
-	echo "    - all:  Gate ($(TASK)) + Inference (lifecycle)"; \
+	tmux new-session -d -s $$SESSION -n shell "docker exec -i $$DUSER_FLAG $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && exec bash'"; \
+	tmux set-option -t $$SESSION remain-on-exit on; \
+	tmux new-window -t $$SESSION -n gate "docker exec -i $$DUSER_FLAG $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && ros2 launch neural_gate neural_gate.launch.py'"; \
+	tmux new-window -t $$SESSION -n infer "docker exec -i $$DUSER_FLAG $$CONTAINER /bin/bash -lc 'source /opt/ros/humble/setup.bash && cd /home/ros/ros2_ws && source install/setup.bash && PYTHONPATH=/home/ros/ros2_ws/src:\$$PYTHONPATH python3 -m neural_manager.neural_inference.neural_infer'"; \
+	echo ">>> Tmux session '$$SESSION' created with 3 windows:"; \
+	echo "    - shell:  Interactive shell"; \
+	echo "    - gate:   Neural Gate launch"; \
+	echo "    - infer:  Neural Inference"; \
 	echo ">>> Attaching... (detach with Ctrl+b then d)"; \
-	sleep 1; \
+	for i in $$(seq 1 10); do tmux has-session -t $$SESSION 2>/dev/null && break; sleep 0.5; done; \
 	exec tmux attach -t $$SESSION
 
 .PHONY: neural-attach

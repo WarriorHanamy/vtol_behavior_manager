@@ -24,7 +24,7 @@ ExecStart=/bin/sh -eu -c '\
   echo "========================================"; \
   echo "Starting VTOL Simulation Session"; \
   echo "========================================"; \
-   docker compose up -d --remove-orphans px4 qgc bht; \
+   docker compose up -d --no-build --remove-orphans px4 qgc bht; \
   echo ""; \
   echo "✓ Containers started:"; \
   docker compose ps --format "table {{.Name}}\t{{.Status}}"; \

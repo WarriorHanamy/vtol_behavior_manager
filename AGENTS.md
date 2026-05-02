@@ -14,10 +14,17 @@ When you need compilation logs to decide next steps:
 - Logs are written to `build/compile.log`
 - Do NOT attempt native `colcon build` on Arch Linux
 
+## FastDDS Schema Reference
+
+- FastDDS XML configuration schema: <https://fast-dds.docs.eprosima.com/en/v2.6.11/fastdds/xml_configuration/transports.html>
+- Version: 2.6.11
+
 ## LINT & FORMAT
+
 ### python codes
 
 Run
+
 ```bash
 uv run ruff check --fix .
 ```
