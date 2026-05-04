@@ -65,7 +65,10 @@ class RevisionContext:
     with open(metadata_path) as f:
       meta = yaml.safe_load(f)
 
-    specs = [FeatureSpec(name=f["name"], dim=f["dim"]) for f in meta.get("low_dim", [])]
+    specs = []
+    for features_list in meta.values():
+      if isinstance(features_list, list):
+        specs.extend(FeatureSpec(name=f["name"], dim=f["dim"]) for f in features_list)
     obs_dim = sum(s.dim for s in specs)
 
     # Look for any TensorRT engine file in the revision directory

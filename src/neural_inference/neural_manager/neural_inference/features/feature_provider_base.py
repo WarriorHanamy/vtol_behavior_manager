@@ -137,7 +137,8 @@ class FeatureProviderBase:
   def _load_metadata(self) -> list[FeatureSpec]:
     """Parse observation_metadata.yaml and return list of FeatureSpec.
 
-    Expects format: {'low_dim': [{'name': '...', 'dim': N}, ...]}
+    Supports any group key (e.g. 'low_dim', 'actor', 'critic').
+    Iterates over all top-level keys that hold a list of {name, dim} entries.
 
     Returns:
         list of FeatureSpec objects parsed from metadata file
@@ -147,12 +148,14 @@ class FeatureProviderBase:
       data = yaml.safe_load(f)
 
     features = []
-    for feature_data in data.get("low_dim", []):
-      spec = FeatureSpec(
-        name=feature_data["name"],
-        dim=feature_data["dim"],
-      )
-      features.append(spec)
+    for features_list in data.values():
+      if isinstance(features_list, list):
+        for feature_data in features_list:
+          spec = FeatureSpec(
+            name=feature_data["name"],
+            dim=feature_data["dim"],
+          )
+          features.append(spec)
 
     return features
 
